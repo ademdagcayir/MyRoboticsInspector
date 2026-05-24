@@ -23,6 +23,10 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '9.0.x'
+          dotnet-quality: 'ga'
+
+      - name: Pin SDK to 9.x (suppress .NET 10 on runner)
+        run: dotnet --version
 
       - name: Install MAUI Windows workload
         run: dotnet workload install maui-windows
