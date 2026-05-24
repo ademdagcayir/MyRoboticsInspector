@@ -13,6 +13,10 @@ namespace MyRoboticsInspector.Services;
 ///   1) Kullanıcı "Güncellemeleri Kontrol Et" der → CheckAsync HTTP üzerinden RELEASES manifesti çeker
 ///   2) Yeni sürüm varsa UpdateInfo döner, UI "X.Y.Z yeni" gösterir
 ///   3) Kullanıcı "İndir ve Yükle" der → ApplyAndRestartAsync delta paketi çeker + uygular + restart
+///
+/// Kaynak seçimi (otomatik):
+///   - URL "https://github.com/..." ile başlıyorsa → GithubSource (public releases)
+///   - Diğer → SimpleWebSource (kendi sunucu, RELEASES + nupkg)
 /// </summary>
 public class UpdateService
 {
@@ -36,7 +40,7 @@ public class UpdateService
 #if WINDOWS
         try
         {
-            var mgr = new UpdateManager(new SimpleWebSource(updateUrl));
+            var mgr = new UpdateManager(BuildSource(updateUrl));
             if (!mgr.IsInstalled)
                 return UpdateCheckResult.NotInstalled;
 
@@ -68,7 +72,7 @@ public class UpdateService
 #if WINDOWS
         try
         {
-            var mgr = new UpdateManager(new SimpleWebSource(updateUrl));
+            var mgr = new UpdateManager(BuildSource(updateUrl));
             if (!mgr.IsInstalled)
                 return UpdateCheckResult.NotInstalled;
 
@@ -90,6 +94,32 @@ public class UpdateService
         return UpdateCheckResult.NotSupported;
 #endif
     }
+
+#if WINDOWS
+    /// <summary>
+    /// URL'ye göre otomatik kaynak seçimi:
+    ///   github.com → GithubSource (public repo releases)
+    ///   diğer      → SimpleWebSource (kendi sunucu, RELEASES + nupkg)
+    /// </summary>
+    private static IUpdateSource BuildSource(string updateUrl)
+    {
+        if (updateUrl.StartsWith("https://github.com/", StringComparison.OrdinalIgnoreCase))
+        {
+            // github.com/owner/repo  →  GithubSource
+            // github.com/owner/repo/releases/...  →  yine owner/repo kısmını al
+            var uri = new Uri(updateUrl);
+            var segments = uri.AbsolutePath.Trim('/').Split('/');
+            if (segments.Length >= 2)
+            {
+                var owner = segments[0];
+                var repo  = segments[1];
+                // repoUrl = https://github.com/owner/repo
+                return new GithubSource($"https://github.com/{owner}/{repo}", null, false);
+            }
+        }
+        return new SimpleWebSource(updateUrl);
+    }
+#endif
 }
 
 /// <summary>Güncelleme akışının üç olası dönüşü (+ hata).</summary>
