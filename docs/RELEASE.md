@@ -158,52 +158,70 @@ Delta paketleri kullanılmıyor olabilir. Bir önceki sürümün `*-full.nupkg` 
 
 ---
 
-## 10. CI/CD otomasyonu (opsiyonel ama tavsiye)
+## 10. CI/CD — GitHub Actions (aktif)
 
-GitHub Actions örneği:
+`.github/workflows/release-windows.yml` dosyası repo'ya eklenmiş durumda.
 
-```yaml
-name: Release
-on:
-  push:
-    tags: ['v*']
+### Otomatik yayın (tag push)
 
-jobs:
-  publish:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
-      - run: dotnet workload install maui-windows
-      - run: dotnet tool install -g vpk
-      - name: Publish + pack
-        shell: cmd
-        run: |
-          set VERSION=${{ github.ref_name }}
-          set VERSION=%VERSION:v=%
-          Tools\publish-windows.cmd %VERSION%
-      - name: Upload to server
-        # rsync / scp / aws s3 sync / vb. ile Releases\ klasörünü sunucuya at
-        run: |
-          aws s3 sync Releases s3://myrobotics-updates/inspector/ --delete-after
+```bash
+git tag v1.0.1
+git push origin v1.0.1
 ```
 
-`git tag v1.0.1 && git push --tags` → otomatik build + yayın.
+→ GitHub Actions otomatik olarak:
+1. `dotnet publish` (self-contained, win-x64)
+2. `vpk pack` (Setup.exe + full.nupkg + delta.nupkg + RELEASES)
+3. GitHub Release oluşturur, dosyaları asset olarak ekler
+
+Release URL'i: `https://github.com/ademdagcayir/MyRoboticsInspector/releases`
+
+### Manuel tetikleme (Actions UI'dan)
+
+GitHub → Actions → "Windows Release" → "Run workflow" → sürüm gir → Çalıştır.
+
+### UpdateService: GitHub Releases kullanmak için
+
+`AppSettings.UpdateServerUrl` değerini şöyle ayarla:
+
+```
+https://github.com/ademdagcayir/MyRoboticsInspector
+```
+
+UpdateService, URL `https://github.com/` ile başlıyorsa otomatik olarak `GithubSource` seçer
+(public releases gerektirir). Private repo için kendi sunucunla `SimpleWebSource` kullanmaya devam et.
+
+### Ek adım: kendi sunucuya da yükle (isteğe bağlı)
+
+Eğer hem GitHub Release hem `myrobotics.com.tr/updates/inspector/` üzerinden güncelletmek istersen,
+workflow'un sonuna ekle:
+
+```yaml
+- name: Upload to own server
+  # scp / rsync / FTP / S3 ile Releases\ klasörünü sunucuya at
+  run: |
+    # Örnek: rsync -avz Releases/ user@myrobotics.com.tr:/var/www/updates/inspector/
+```
 
 ---
 
 ## Hızlı kontrol listesi
 
 İlk kez yayın için:
-- [ ] vpk yüklü (`dotnet tool install -g vpk`)
-- [ ] Sunucu hazır + HTTPS aktif
+- [x] GitHub repo oluşturuldu (`ademdagcayir/MyRoboticsInspector`, private)
+- [x] `.github/workflows/release-windows.yml` commit'lendi
+- [ ] Sunucu hazır + HTTPS aktif (kendi sunucu kullanıyorsan)
 - [ ] `Settings.UpdateServerUrl` default değeri kod içinde doğru
 - [ ] Test PC'de Setup.exe ile kurulum + yeni sürüm güncelleme akışı denendi
 
 Her sürüm için:
-- [ ] csproj/git tag versiyonu uyumlu
-- [ ] `publish-windows.cmd 1.0.X` çalıştırıldı
-- [ ] `Releases\` klasörünün tamamı sunucuya yüklendi (özellikle **RELEASES** dosyası)
+- [ ] `git tag vX.Y.Z && git push origin vX.Y.Z` ile GitHub Release tetikle
+- [ ] Actions tamamlandı mı kontrol et: `gh run list --repo ademdagcayir/MyRoboticsInspector`
+- [ ] Release dosyaları yüklendi mi: `gh release view vX.Y.Z --repo ademdagcayir/MyRoboticsInspector`
 - [ ] Test PC'de "Şimdi Kontrol Et" → yeni sürüm görüldü → indirildi → çalıştı
+
+Hızlı tek-satır kontrol:
+
+```bash
+gh release list --repo ademdagcayir/MyRoboticsInspector
+```
