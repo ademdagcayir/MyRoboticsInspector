@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>MyRoboticsInspector.PdfPreview</RootNamespace>
+    <AssemblyName>PdfPreview</AssemblyName>
+    <!-- We compile the renderer + models in-place, no project reference -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="QuestPDF" Version="2026.5.0" />
+    <PackageReference Include="sqlite-net-pcl" Version="1.9.172" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Pull in the pure renderer and the model POCOs from the main project. -->
+    <Compile Include="..\..\Services\ReportRenderer.cs" Link="Services\ReportRenderer.cs" />
+    <Compile Include="..\..\Models\AppSettings.cs" Link="Models\AppSettings.cs" />
+    <Compile Include="..\..\Models\Customer.cs" Link="Models\Customer.cs" />
+    <Compile Include="..\..\Models\Job.cs" Link="Models\Job.cs" />
+    <Compile Include="..\..\Models\Inspection.cs" Link="Models\Inspection.cs" />
+    <Compile Include="..\..\Models\Defect.cs" Link="Models\Defect.cs" />
+  </ItemGroup>
+
+</Project>

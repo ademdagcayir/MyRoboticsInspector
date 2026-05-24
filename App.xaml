@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Application xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:local="clr-namespace:MyRoboticsInspector"
+             xmlns:conv="clr-namespace:MyRoboticsInspector.Converters"
+             x:Class="MyRoboticsInspector.App">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Resources/Styles/Colors.xaml" />
+                <ResourceDictionary Source="Resources/Styles/Styles.xaml" />
+                <ResourceDictionary Source="Resources/Styles/Theme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <conv:InvertedBoolConverter x:Key="InvertedBool" />
+            <conv:BoolToRecordTextConverter x:Key="BoolToRecordText" />
+            <conv:BoolToRecordColorConverter x:Key="BoolToRecordColor" />
+            <conv:BoolToLightTextConverter x:Key="BoolToLightText" />
+            <conv:BoolToConnectionTextConverter x:Key="BoolToConnectionText" />
+            <conv:StringNotEmptyConverter x:Key="StringNotEmpty" />
+            <conv:MsToTimestampConverter x:Key="MsToTimestamp" />
+            <conv:BoolToPlayPauseTextConverter x:Key="BoolToPlayPauseText" />
+            <conv:BoolToGamepadButtonTextConverter x:Key="BoolToGamepadButtonText" />
+            <conv:BoolToCardStyleConverter x:Key="BoolToCardStyle" />
+            <conv:BoolToConnectionColorConverter x:Key="BoolToConnectionColor" />
+            <conv:BoolToFlowColorConverter x:Key="BoolToFlowColor" />
+            <conv:IntToBoolConverter x:Key="IntToBool" />
+            <conv:DateTimeToTimeSpanConverter x:Key="DateTimeToTimeSpan" />
+            <conv:ProgressNormConverter x:Key="ProgressNorm" />
+            <conv:BoolToBackupColorConverter x:Key="BoolToBackupColor" />
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

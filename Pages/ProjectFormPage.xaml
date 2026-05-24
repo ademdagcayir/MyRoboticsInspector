@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:MyRoboticsInspector.ViewModels"
+             xmlns:m="clr-namespace:MyRoboticsInspector.Models"
+             x:Class="MyRoboticsInspector.Pages.ProjectFormPage"
+             x:DataType="vm:ProjectFormViewModel"
+             Title="{Binding Title}"
+             BackgroundColor="{StaticResource ColorPageBg}">
+
+    <Grid RowDefinitions="Auto,*,Auto">
+
+        <!-- ============== STICKY HEADER ============== -->
+        <Border Grid.Row="0" Background="{StaticResource ColorSurface}"
+                Stroke="{StaticResource ColorBorder}" StrokeThickness="0,0,0,1"
+                Padding="16,12">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                <VerticalStackLayout Grid.Column="0" Spacing="2" VerticalOptions="Center">
+                    <Label Text="PROJE" Style="{StaticResource SectionTitle}" />
+                    <Label Text="{Binding PageHeader}" FontSize="20" FontAttributes="Bold"
+                           TextColor="{StaticResource ColorTextPrimary}" />
+                </VerticalStackLayout>
+
+                <Button Grid.Column="1" Text="Vazgeç"
+                        Style="{StaticResource SecondaryButton}"
+                        Padding="20,0" Command="{Binding CancelCommand}" />
+                <Button Grid.Column="2" Text="Kaydet"
+                        Style="{StaticResource SuccessButton}"
+                        Padding="24,0" Command="{Binding SaveCommand}" />
+            </Grid>
+        </Border>
+
+        <!-- ============== FORM ============== -->
+        <ScrollView Grid.Row="1" Padding="16">
+            <VerticalStackLayout Spacing="12" MaximumWidthRequest="820" HorizontalOptions="Center">
+
+                <!-- Temel Bilgiler -->
+                <Border Style="{StaticResource CardBorder}">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="TEMEL BİLGİLER" Style="{StaticResource SectionTitle}" />
+
+                        <VerticalStackLayout>
+                            <Label Text="Proje Adı *" Style="{StaticResource Caption}" />
+                            <Entry Text="{Binding EditingProject.Title}"
+                                   Placeholder="örn. EYUPSULTAN İSKİ ŞUBE YESILPINAR MAH"
+                                   FontSize="15" />
+                        </VerticalStackLayout>
+
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                            <VerticalStackLayout Grid.Column="0">
+                                <Label Text="Müşteri *" Style="{StaticResource Caption}" />
+                                <Picker Title="Müşteri seç"
+                                        ItemsSource="{Binding Customers}"
+                                        ItemDisplayBinding="{Binding Name}"
+                                        SelectedItem="{Binding SelectedCustomer}" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Column="1">
+                                <Label Text="Tarih" Style="{StaticResource Caption}" />
+                                <DatePicker Date="{Binding EditingProject.ProjectDate}"
+                                            Format="dd.MM.yyyy"
+                                            BackgroundColor="{StaticResource ColorSurfaceHigh}"
+                                            TextColor="{StaticResource ColorTextPrimary}" />
+                            </VerticalStackLayout>
+                        </Grid>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- Konum -->
+                <Border Style="{StaticResource CardBorder}">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="KONUM" Style="{StaticResource SectionTitle}" />
+
+                        <Grid ColumnDefinitions="*,*,2*" ColumnSpacing="10">
+                            <VerticalStackLayout Grid.Column="0">
+                                <Label Text="İl" Style="{StaticResource Caption}" />
+                                <Entry Text="{Binding EditingProject.Province}" Placeholder="İSTANBUL" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Column="1">
+                                <Label Text="İlçe" Style="{StaticResource Caption}" />
+                                <Entry Text="{Binding EditingProject.District}" Placeholder="EYUPSULTAN" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Column="2">
+                                <Label Text="Semt / Mahalle" Style="{StaticResource Caption}" />
+                                <Entry Text="{Binding EditingProject.Neighborhood}" Placeholder="YESILPINAR MAH" />
+                            </VerticalStackLayout>
+                        </Grid>
+
+                        <VerticalStackLayout>
+                            <Label Text="Saha (opsiyonel)" Style="{StaticResource Caption}" />
+                            <Entry Text="{Binding EditingProject.Site}"
+                                   Placeholder="234. Sokak, no 12-38 arası" />
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- İSKİ -->
+                <Border Style="{StaticResource CardBorder}">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="İSKİ BİLGİLERİ" Style="{StaticResource SectionTitle}" />
+
+                        <VerticalStackLayout>
+                            <Label Text="Hakediş No" Style="{StaticResource Caption}" />
+                            <Entry Text="{Binding EditingProject.HakedisNo}" Placeholder="örn. 2026-HK-042" />
+                        </VerticalStackLayout>
+
+                        <VerticalStackLayout>
+                            <Label Text="Görüntüleme Aşaması" Style="{StaticResource Caption}" />
+                            <Picker ItemsSource="{Binding StageOptions}"
+                                    SelectedItem="{Binding SelectedStage}"
+                                    ItemDisplayBinding="{Binding Label}" />
+                        </VerticalStackLayout>
+
+                        <VerticalStackLayout>
+                            <Label Text="Görüntüleme Amacı" Style="{StaticResource Caption}" />
+                            <Picker ItemsSource="{Binding PurposeOptions}"
+                                    SelectedItem="{Binding SelectedPurpose}"
+                                    ItemDisplayBinding="{Binding Label}" />
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- Logo -->
+                <Border Style="{StaticResource CardBorder}">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="LOGO (rapor üst köşesinde)" Style="{StaticResource SectionTitle}" />
+
+                        <Grid ColumnDefinitions="120,*" ColumnSpacing="12">
+                            <Border Grid.Column="0"
+                                    Background="{StaticResource ColorSurfaceHigh}"
+                                    Stroke="{StaticResource ColorBorder}" StrokeThickness="1"
+                                    StrokeShape="RoundRectangle 6"
+                                    HeightRequest="80" WidthRequest="120">
+                                <Image Source="{Binding EditingProject.LogoPath, TargetNullValue=''}"
+                                       Aspect="AspectFit" Margin="6" />
+                            </Border>
+
+                            <VerticalStackLayout Grid.Column="1" Spacing="6" VerticalOptions="Center">
+                                <Label Text="{Binding EditingProject.LogoPath, TargetNullValue='Logo seçilmedi'}"
+                                       Style="{StaticResource Caption}" LineBreakMode="MiddleTruncation" />
+                                <HorizontalStackLayout Spacing="8">
+                                    <Button Text="📁 Logo Seç"
+                                            Style="{StaticResource SecondaryButton}"
+                                            Padding="16,0" Command="{Binding PickLogoCommand}" />
+                                    <Button Text="Temizle"
+                                            Style="{StaticResource QuietButton}"
+                                            Command="{Binding ClearLogoCommand}" />
+                                </HorizontalStackLayout>
+                            </VerticalStackLayout>
+                        </Grid>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- Notlar -->
+                <Border Style="{StaticResource CardBorder}">
+                    <VerticalStackLayout Spacing="6">
+                        <Label Text="NOTLAR" Style="{StaticResource SectionTitle}" />
+                        <Editor Text="{Binding EditingProject.Notes}"
+                                HeightRequest="120"
+                                Placeholder="Proje hakkında özel notlar, koşullar..." />
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- Düzenleme modunda ek aksiyonlar -->
+                <Border Style="{StaticResource CardBorder}" IsVisible="{Binding IsNew, Converter={StaticResource InvertedBool}}">
+                    <VerticalStackLayout Spacing="8">
+                        <Label Text="EK İŞLEMLER" Style="{StaticResource SectionTitle}" />
+                        <Button Text="📁  Kanalları Aç"
+                                Style="{StaticResource PrimaryButton}"
+                                Command="{Binding OpenChannelsCommand}" />
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                            <Button Grid.Column="0" Text="📋 Projeyi Kopyala"
+                                    Style="{StaticResource SecondaryButton}"
+                                    Command="{Binding DuplicateCommand}" />
+                            <Button Grid.Column="1" Text="🗑 Sil"
+                                    Style="{StaticResource DangerButton}"
+                                    Command="{Binding DeleteCommand}" />
+                        </Grid>
+                    </VerticalStackLayout>
+                </Border>
+
+                <Label Text="{Binding StatusMessage}" Style="{StaticResource Caption}" HorizontalOptions="Center" />
+
+                <BoxView HeightRequest="20" Color="Transparent" /> <!-- bottom breathing -->
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <!-- ============== STICKY BOTTOM ============== -->
+        <Border Grid.Row="2" Background="{StaticResource ColorSurface}"
+                Stroke="{StaticResource ColorBorder}" StrokeThickness="0,1,0,0"
+                Padding="16,10">
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="10" MaximumWidthRequest="500" HorizontalOptions="End">
+                <Button Grid.Column="0" Text="Vazgeç"
+                        Style="{StaticResource SecondaryButton}"
+                        Command="{Binding CancelCommand}" />
+                <Button Grid.Column="1" Text="✓  Kaydet"
+                        Style="{StaticResource SuccessButton}"
+                        Command="{Binding SaveCommand}" />
+            </Grid>
+        </Border>
+
+    </Grid>
+</ContentPage>

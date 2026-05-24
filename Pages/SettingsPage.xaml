@@ -1,0 +1,320 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:MyRoboticsInspector.ViewModels"
+             x:Class="MyRoboticsInspector.Pages.SettingsPage"
+             x:DataType="vm:SettingsViewModel"
+             Title="{Binding Title}"
+             BackgroundColor="{StaticResource ColorPageBg}">
+
+    <Grid RowDefinitions="Auto,*">
+
+        <!-- Sticky header -->
+        <Border Grid.Row="0" Background="{StaticResource ColorSurface}"
+                Stroke="{StaticResource ColorBorder}" StrokeThickness="0,0,0,1"
+                Padding="16,12">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <VerticalStackLayout Grid.Column="0" Spacing="2">
+                    <Label Text="AYARLAR" Style="{StaticResource SectionTitle}" />
+                    <Label Text="Sistem Ayarları" FontSize="20" FontAttributes="Bold"
+                           TextColor="{StaticResource ColorTextPrimary}" />
+                </VerticalStackLayout>
+                <Button Grid.Column="1" Text="✓  Kaydet"
+                        Style="{StaticResource SuccessButton}"
+                        Padding="20,0" Command="{Binding SaveCommand}" />
+            </Grid>
+        </Border>
+
+        <ScrollView Grid.Row="1" Padding="16">
+            <VerticalStackLayout Spacing="12" MaximumWidthRequest="820" HorizontalOptions="Center">
+
+                <!-- ============== PROJE / KONUM ============== -->
+                <Border Style="{StaticResource CardBorder}">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="PROJE / KONUM (overlay'de görünür)" Style="{StaticResource SectionTitle}" />
+                        <VerticalStackLayout>
+                            <Label Text="Proje Adı" Style="{StaticResource Caption}" />
+                            <Entry Text="{Binding Settings.ProjectName}" Placeholder="örn. Atakent Yağmursuyu" />
+                        </VerticalStackLayout>
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                            <VerticalStackLayout Grid.Column="0">
+                                <Label Text="Mahalle" Style="{StaticResource Caption}" />
+                                <Entry Text="{Binding Settings.Neighborhood}" Placeholder="örn. Atakent" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Column="1">
+                                <Label Text="Sokak" Style="{StaticResource Caption}" />
+                                <Entry Text="{Binding Settings.Street}" Placeholder="örn. 234. Sokak" />
+                            </VerticalStackLayout>
+                        </Grid>
+                        <VerticalStackLayout>
+                            <Label Text="Operatör Adı" Style="{StaticResource Caption}" />
+                            <Entry Text="{Binding Settings.OperatorName}" Placeholder="örn. Adem Dağcayır" />
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- ============== KAMERA (RTSP) ============== -->
+                <Border Style="{StaticResource CardBorder}">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="KAMERA (RTSP)" Style="{StaticResource SectionTitle}" />
+                        <VerticalStackLayout>
+                            <Label Text="RTSP URL" Style="{StaticResource Caption}" />
+                            <Entry Text="{Binding Settings.RtspUrl}"
+                                   Placeholder="rtsp://kullanici:sifre@ip:554/Streaming/Channels/101" />
+                            <Label Text="Hikvision: rtsp://USER:PASS@IP:554/Streaming/Channels/101 (ana) — /102 (sub)"
+                                   FontSize="10" TextColor="{StaticResource ColorTextTertiary}" Margin="0,4,0,0" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout>
+                            <Label Text="Ağ Önbellek (ms)" Style="{StaticResource Caption}" />
+                            <Entry Text="{Binding Settings.NetworkCachingMs}" Keyboard="Numeric" />
+                            <Label Text="Düşük = az gecikme, çok = daha az takılma"
+                                   FontSize="10" TextColor="{StaticResource ColorTextTertiary}" Margin="0,4,0,0" />
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- ============== MQTT BROKER ============== -->
+                <Border Style="{StaticResource CardBorder}">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="MQTT BROKER" Style="{StaticResource SectionTitle}" />
+                        <Grid ColumnDefinitions="*,120" ColumnSpacing="10">
+                            <VerticalStackLayout Grid.Column="0">
+                                <Label Text="Broker Host" Style="{StaticResource Caption}" />
+                                <Entry Text="{Binding Settings.BrokerHost}" Placeholder="IP veya host" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Column="1">
+                                <Label Text="Port" Style="{StaticResource Caption}" />
+                                <Entry Text="{Binding Settings.BrokerPort}" Keyboard="Numeric" />
+                            </VerticalStackLayout>
+                        </Grid>
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                            <VerticalStackLayout Grid.Column="0">
+                                <Label Text="Kullanıcı (opsiyonel)" Style="{StaticResource Caption}" />
+                                <Entry Text="{Binding Settings.BrokerUsername}" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Column="1">
+                                <Label Text="Şifre" Style="{StaticResource Caption}" />
+                                <Entry Text="{Binding Settings.BrokerPassword}" IsPassword="True" />
+                            </VerticalStackLayout>
+                        </Grid>
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                            <VerticalStackLayout Grid.Column="0">
+                                <Label Text="Topic Prefix" Style="{StaticResource Caption}" />
+                                <Entry Text="{Binding Settings.TopicPrefix}" Placeholder="myrobotics" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Column="1">
+                                <Label Text="Robot ID" Style="{StaticResource Caption}" />
+                                <Entry Text="{Binding Settings.RobotId}" Placeholder="robot1" />
+                            </VerticalStackLayout>
+                        </Grid>
+                        <Label Text="Komutlar → {prefix}/{robotId}/cmd  •  Telemetri ← {prefix}/{robotId}/telemetry"
+                               FontSize="10" TextColor="{StaticResource ColorTextTertiary}" />
+
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10" Margin="0,4,0,0">
+                            <Button Grid.Column="0" Text="Bağlantıyı Test Et (2 sn)"
+                                    Style="{StaticResource SecondaryButton}"
+                                    Command="{Binding TestConnectionCommand}"
+                                    IsEnabled="{Binding IsTesting, Converter={StaticResource InvertedBool}}" />
+                            <ActivityIndicator Grid.Column="1"
+                                               IsRunning="{Binding IsTesting}" IsVisible="{Binding IsTesting}"
+                                               Color="{StaticResource ColorAccent}" VerticalOptions="Center" />
+                        </Grid>
+                        <Label Text="{Binding TestResult}" Style="{StaticResource Caption}"
+                               IsVisible="{Binding TestResult, Converter={StaticResource StringNotEmpty}}" />
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- ============== YEDEKLEME ============== -->
+                <Border Style="{StaticResource CardBorder}">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="YEDEKLEME (OneDrive)" Style="{StaticResource SectionTitle}" />
+                        <Border Background="{StaticResource ColorSurfaceHigh}"
+                                StrokeShape="RoundRectangle 6" StrokeThickness="0"
+                                Padding="10">
+                            <VerticalStackLayout Spacing="8">
+                                <Label Text="{Binding BackupStatusText}"
+                                       TextColor="{Binding BackupStatusColor}" FontAttributes="Bold" />
+                                <Label Text="{Binding BackupRecommendedFolder, StringFormat='Önerilen klasör: {0}'}"
+                                       FontSize="11" TextColor="{StaticResource ColorTextTertiary}"
+                                       IsVisible="{Binding OneDriveAvailable}" />
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="10" IsVisible="{Binding OneDriveAvailable}">
+                                    <Button Grid.Column="0" Text="📁 OneDrive'a yönlendir"
+                                            Style="{StaticResource PrimaryButton}"
+                                            Command="{Binding UseOneDriveCommand}" />
+                                    <Button Grid.Column="1" Text="📦 Eski verileri taşı"
+                                            Style="{StaticResource SecondaryButton}"
+                                            Command="{Binding MigrateExistingDataCommand}"
+                                            IsEnabled="{Binding IsMigrating, Converter={StaticResource InvertedBool}}" />
+                                </Grid>
+                                <Label Text="{Binding MigrationLog}" Style="{StaticResource Caption}"
+                                       IsVisible="{Binding MigrationLog, Converter={StaticResource StringNotEmpty}}" />
+                                <ActivityIndicator IsRunning="{Binding IsMigrating}" IsVisible="{Binding IsMigrating}"
+                                                   Color="{StaticResource ColorAccent}" />
+                            </VerticalStackLayout>
+                        </Border>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- ============== DEPOLAMA ============== -->
+                <Border Style="{StaticResource CardBorder}">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="DEPOLAMA" Style="{StaticResource SectionTitle}" />
+                        <VerticalStackLayout>
+                            <Label Text="Video / Snapshot / Rapor Klasörü" Style="{StaticResource Caption}" />
+                            <Entry Text="{Binding Settings.StoragePath}" Placeholder="boş = varsayılan" />
+                            <Label Text="Bu yolu OneDrive klasörüne ayarlarsan tüm kayıtlar otomatik yedeklenir."
+                                   FontSize="10" TextColor="{StaticResource ColorTextTertiary}" Margin="0,4,0,0" />
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- ============== JOYSTICK ============== -->
+                <Border Style="{StaticResource CardBorder}">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="JOYSTICK (Logitech F710 / XInput)" Style="{StaticResource SectionTitle}" />
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <Switch Grid.Column="0" IsToggled="{Binding Settings.GamepadAutoStart}" />
+                            <Label Grid.Column="1"
+                                   Text="Uygulama açılınca joystick'i otomatik başlat"
+                                   Style="{StaticResource BodyText}" VerticalOptions="Center" />
+                        </Grid>
+                        <Label Text="F710'u 'X' (XInput) moduna al. Sol stick = sürüş • RT = tam hız, LT = yavaş • A = snapshot, B = ACİL DUR, X = ışık, Y = kusur, Start = kayıt, Back = inceleme başlat/bitir."
+                               FontSize="10" TextColor="{StaticResource ColorTextTertiary}" />
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- ============== FFMPEG ============== -->
+                <Border Style="{StaticResource CardBorder}">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="FFMPEG (kayda overlay göm)" Style="{StaticResource SectionTitle}" />
+                        <VerticalStackLayout>
+                            <Label Text="FFmpeg Yolu" Style="{StaticResource Caption}" />
+                            <Entry Text="{Binding Settings.FfmpegPath}" Placeholder="ffmpeg.exe" />
+                            <Label Text="FFmpeg yoksa kayıt LibVLC ile overlay'siz devam eder."
+                                   FontSize="10" TextColor="{StaticResource ColorTextTertiary}" Margin="0,4,0,0" />
+                        </VerticalStackLayout>
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <Switch Grid.Column="0" IsToggled="{Binding Settings.BurnOverlayInRecording}" />
+                            <Label Grid.Column="1"
+                                   Text="Kayıtta overlay'ı göm (proje, mesafe, sensörler)"
+                                   Style="{StaticResource BodyText}" VerticalOptions="Center" />
+                        </Grid>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- ============== ŞİRKET ============== -->
+                <Border Style="{StaticResource CardBorder}">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="ŞİRKET" Style="{StaticResource SectionTitle}" />
+                        <VerticalStackLayout>
+                            <Label Text="Şirket Adı (raporlarda görünür)" Style="{StaticResource Caption}" />
+                            <Entry Text="{Binding Settings.CompanyName}" Placeholder="My Robotics" />
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- ============== GÜNCELLEME (Velopack) ============== -->
+                <Border Style="{StaticResource CardBorder}">
+                    <VerticalStackLayout Spacing="10">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Grid.Column="0" Text="OTOMATİK GÜNCELLEME" Style="{StaticResource SectionTitle}" />
+                            <Border Grid.Column="1" Background="{StaticResource ColorSurfaceHigh}"
+                                    StrokeShape="RoundRectangle 10" StrokeThickness="0" Padding="8,2"
+                                    VerticalOptions="Center">
+                                <Label Style="{StaticResource Caption}" FontSize="10">
+                                    <Label.FormattedText>
+                                        <FormattedString>
+                                            <Span Text="v" />
+                                            <Span Text="{Binding CurrentVersion}" FontAttributes="Bold"
+                                                  TextColor="{StaticResource ColorTextPrimary}" />
+                                        </FormattedString>
+                                    </Label.FormattedText>
+                                </Label>
+                            </Border>
+                        </Grid>
+
+                        <VerticalStackLayout>
+                            <Label Text="Güncelleme Sunucusu (Velopack RELEASES URL)" Style="{StaticResource Caption}" />
+                            <Entry Text="{Binding Settings.UpdateServerUrl}"
+                                   Placeholder="https://myrobotics.com.tr/updates/inspector/" />
+                            <Label Text="Bu URL'deki RELEASES + *.nupkg dosyaları manifest olarak okunur."
+                                   FontSize="10" TextColor="{StaticResource ColorTextTertiary}" Margin="0,4,0,0" />
+                        </VerticalStackLayout>
+
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <Switch Grid.Column="0" IsToggled="{Binding Settings.AutoCheckUpdates}" />
+                            <Label Grid.Column="1"
+                                   Text="Açılışta arka planda güncellemeleri kontrol et"
+                                   Style="{StaticResource BodyText}" VerticalOptions="Center" />
+                        </Grid>
+
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                            <Button Grid.Column="0" Text="Şimdi Kontrol Et"
+                                    Style="{StaticResource SecondaryButton}"
+                                    Command="{Binding CheckUpdateCommand}"
+                                    IsEnabled="{Binding IsCheckingUpdate, Converter={StaticResource InvertedBool}}" />
+                            <ActivityIndicator Grid.Column="1"
+                                               IsRunning="{Binding IsCheckingUpdate}"
+                                               IsVisible="{Binding IsCheckingUpdate}"
+                                               Color="{StaticResource ColorAccent}" VerticalOptions="Center" />
+                        </Grid>
+
+                        <!-- Update available -> büyük indir butonu -->
+                        <Border Background="{StaticResource ColorSurfaceHigh}" StrokeThickness="0"
+                                StrokeShape="RoundRectangle 8" Padding="12"
+                                IsVisible="{Binding UpdateAvailable}">
+                            <VerticalStackLayout Spacing="8">
+                                <Label Style="{StaticResource BodyText}">
+                                    <Label.FormattedText>
+                                        <FormattedString>
+                                            <Span Text="🎉 Yeni sürüm: " />
+                                            <Span Text="{Binding NewVersion}" FontAttributes="Bold"
+                                                  TextColor="{StaticResource ColorSuccess}" />
+                                        </FormattedString>
+                                    </Label.FormattedText>
+                                </Label>
+                                <Button Text="⬇  İndir ve Yeniden Başlat"
+                                        Style="{StaticResource SuccessButton}"
+                                        Command="{Binding ApplyUpdateCommand}"
+                                        IsEnabled="{Binding IsApplyingUpdate, Converter={StaticResource InvertedBool}}" />
+                                <ProgressBar Progress="{Binding UpdateProgress, Converter={StaticResource ProgressNorm}}"
+                                             ProgressColor="{StaticResource ColorSuccess}"
+                                             IsVisible="{Binding IsApplyingUpdate}" />
+                            </VerticalStackLayout>
+                        </Border>
+
+                        <Label Text="{Binding UpdateStatus}" Style="{StaticResource Caption}"
+                               IsVisible="{Binding UpdateStatus, Converter={StaticResource StringNotEmpty}}" />
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- ============== HESAP ============== -->
+                <Border Style="{StaticResource CardBorder}">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                        <Border Grid.Column="0"
+                                Background="{StaticResource ColorSurfaceHigh}"
+                                StrokeShape="RoundRectangle 22"
+                                HeightRequest="44" WidthRequest="44"
+                                StrokeThickness="0">
+                            <Label Text="👤" FontSize="22"
+                                   HorizontalOptions="Center" VerticalOptions="Center" />
+                        </Border>
+                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                            <Label Text="GİRİŞ YAPAN" Style="{StaticResource SectionTitle}" />
+                            <Label Text="{Binding CurrentProfileName, TargetNullValue='—'}"
+                                   Style="{StaticResource CardTitle}" />
+                        </VerticalStackLayout>
+                        <Button Grid.Column="2" Text="Çıkış Yap"
+                                Style="{StaticResource DangerButton}"
+                                Padding="16,0" VerticalOptions="Center"
+                                Command="{Binding LogoutCommand}" />
+                    </Grid>
+                </Border>
+
+                <Label Text="{Binding StatusMessage}" Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                <BoxView HeightRequest="20" Color="Transparent" />
+
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+</ContentPage>

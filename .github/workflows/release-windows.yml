@@ -1,0 +1,109 @@
+name: Windows Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Sürüm numarası (örn: 1.0.1)'
+        required: true
+        default: '1.0.1'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Install MAUI Windows workload
+        run: dotnet workload install maui-windows
+
+      - name: Install Velopack CLI (vpk)
+        run: dotnet tool install -g vpk
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: dotnet publish (self-contained, win-x64)
+        run: |
+          dotnet publish MyRoboticsInspector.csproj `
+            -f net9.0-windows10.0.19041.0 `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -o publish/win-x64 `
+            -p:Version=${{ steps.version.outputs.VERSION }} `
+            -p:ApplicationDisplayVersion=${{ steps.version.outputs.VERSION }} `
+            -p:WindowsPackageType=None `
+            -p:TargetFrameworks=net9.0-windows10.0.19041.0
+
+      - name: vpk pack (Velopack installer + delta)
+        run: |
+          vpk pack `
+            -u MyRoboticsInspector `
+            -v ${{ steps.version.outputs.VERSION }} `
+            -p publish/win-x64 `
+            -e MyRoboticsInspector.exe `
+            --packTitle "My Robotics Inspector" `
+            --packAuthors "My Robotics" `
+            -o Releases
+
+      - name: Upload Setup.exe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MyRoboticsInspector-${{ steps.version.outputs.VERSION }}-Setup
+          path: Releases/MyRoboticsInspector-win-Setup.exe
+          retention-days: 90
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MyRoboticsInspector-${{ steps.version.outputs.VERSION }}-Release
+          path: |
+            Releases/*.nupkg
+            Releases/RELEASES
+          retention-days: 90
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: MyRoboticsInspector ${{ steps.version.outputs.VERSION }}
+          body: |
+            ## MyRoboticsInspector ${{ steps.version.outputs.VERSION }}
+
+            ### Kurulum
+            - **Yeni kullanıcılar:** `MyRoboticsInspector-win-Setup.exe` indirip çalıştır
+            - **Mevcut kullanıcılar:** Uygulamada Ayarlar → "Şimdi Kontrol Et" ile otomatik güncelleme
+
+            ### Dağıtım dosyaları
+            | Dosya | Açıklama |
+            |-------|----------|
+            | `MyRoboticsInspector-win-Setup.exe` | İlk kurulum installer |
+            | `*-full.nupkg` | Velopack full paket |
+            | `*-delta.nupkg` | Velopack delta (küçük güncelleme) |
+            | `RELEASES` | Velopack manifest (sunucuya yüklenmeli) |
+          files: |
+            Releases/MyRoboticsInspector-win-Setup.exe
+            Releases/*.nupkg
+            Releases/RELEASES
+          draft: false
+          prerelease: false

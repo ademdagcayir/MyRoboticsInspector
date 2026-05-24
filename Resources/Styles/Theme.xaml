@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ResourceDictionary xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+
+    <!--
+    Theme: iOS/macOS-esque dark, saha kullanımı için. Video etrafında göz yormasın diye
+    page background neredeyse siyah; surface elevation katmanlı olarak açılır.
+    Renk seçimleri Apple HIG dark mode'a yakın — tanıdık, modern, kontrastı yüksek.
+    -->
+
+    <!-- Surface hierarchy -->
+    <Color x:Key="ColorPageBg">#0a0a0a</Color>
+    <Color x:Key="ColorSurface">#1c1c1e</Color>
+    <Color x:Key="ColorSurfaceHigh">#2c2c2e</Color>
+    <Color x:Key="ColorSurfaceSubtle">#16161a</Color>
+
+    <!-- Borders & dividers -->
+    <Color x:Key="ColorBorder">#2a2a2c</Color>
+    <Color x:Key="ColorBorderStrong">#3a3a3c</Color>
+
+    <!-- Text -->
+    <Color x:Key="ColorTextPrimary">#ffffff</Color>
+    <Color x:Key="ColorTextSecondary">#aeaeb2</Color>
+    <Color x:Key="ColorTextTertiary">#8e8e93</Color>
+
+    <!-- Brand & semantic -->
+    <Color x:Key="ColorAccent">#0a84ff</Color>          <!-- iOS dark blue -->
+    <Color x:Key="ColorSuccess">#30d158</Color>          <!-- inspection active, ok -->
+    <Color x:Key="ColorWarning">#ff9f0a</Color>          <!-- attention -->
+    <Color x:Key="ColorDanger">#ff453a</Color>           <!-- E-STOP, error -->
+    <Color x:Key="ColorRecord">#ff3b30</Color>           <!-- recording dot -->
+    <Color x:Key="ColorHighlight">#ffd60a</Color>        <!-- mesafe overlay, alert -->
+
+    <!-- Brushes (Shape uyumlu) -->
+    <SolidColorBrush x:Key="BrushPageBg" Color="{StaticResource ColorPageBg}" />
+    <SolidColorBrush x:Key="BrushSurface" Color="{StaticResource ColorSurface}" />
+    <SolidColorBrush x:Key="BrushSurfaceHigh" Color="{StaticResource ColorSurfaceHigh}" />
+    <SolidColorBrush x:Key="BrushBorder" Color="{StaticResource ColorBorder}" />
+
+    <!-- ===== Styles ===== -->
+
+    <!-- Card: section grouping container -->
+    <Style x:Key="CardBorder" TargetType="Border">
+        <Setter Property="Stroke" Value="{StaticResource ColorBorder}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="Background" Value="{StaticResource ColorSurface}" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 10" />
+        <Setter Property="Padding" Value="14" />
+    </Style>
+
+    <!-- Card with success accent (inspection active) -->
+    <Style x:Key="CardBorderAccent" TargetType="Border" BasedOn="{StaticResource CardBorder}">
+        <Setter Property="Stroke" Value="{StaticResource ColorSuccess}" />
+        <Setter Property="StrokeThickness" Value="1.5" />
+    </Style>
+
+    <!-- Section title (small uppercase secondary header) -->
+    <Style x:Key="SectionTitle" TargetType="Label">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="TextColor" Value="{StaticResource ColorTextTertiary}" />
+        <Setter Property="CharacterSpacing" Value="1.2" />
+        <Setter Property="Margin" Value="0,0,0,4" />
+    </Style>
+
+    <!-- Card title (bigger primary header) -->
+    <Style x:Key="CardTitle" TargetType="Label">
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="TextColor" Value="{StaticResource ColorTextPrimary}" />
+    </Style>
+
+    <!-- Body text -->
+    <Style x:Key="BodyText" TargetType="Label">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="TextColor" Value="{StaticResource ColorTextPrimary}" />
+    </Style>
+
+    <!-- Caption (small secondary) -->
+    <Style x:Key="Caption" TargetType="Label">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="TextColor" Value="{StaticResource ColorTextSecondary}" />
+    </Style>
+
+    <!-- Primary action button (filled accent, prominent) -->
+    <Style x:Key="PrimaryButton" TargetType="Button">
+        <Setter Property="BackgroundColor" Value="{StaticResource ColorAccent}" />
+        <Setter Property="TextColor" Value="White" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="HeightRequest" Value="44" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontAttributes" Value="Bold" />
+    </Style>
+
+    <!-- Success primary (start inspection) -->
+    <Style x:Key="SuccessButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+        <Setter Property="BackgroundColor" Value="{StaticResource ColorSuccess}" />
+        <Setter Property="TextColor" Value="#0a3614" />
+    </Style>
+
+    <!-- Warning (e.g. mark defect — orange) -->
+    <Style x:Key="WarningButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+        <Setter Property="BackgroundColor" Value="{StaticResource ColorWarning}" />
+        <Setter Property="TextColor" Value="#3a2400" />
+    </Style>
+
+    <!-- Danger (finish, delete, e-stop) -->
+    <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+        <Setter Property="BackgroundColor" Value="{StaticResource ColorDanger}" />
+        <Setter Property="TextColor" Value="White" />
+    </Style>
+
+    <!-- Secondary (outlined, subtle) -->
+    <Style x:Key="SecondaryButton" TargetType="Button">
+        <Setter Property="BackgroundColor" Value="{StaticResource ColorSurfaceHigh}" />
+        <Setter Property="TextColor" Value="{StaticResource ColorTextPrimary}" />
+        <Setter Property="BorderColor" Value="{StaticResource ColorBorderStrong}" />
+        <Setter Property="BorderWidth" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="HeightRequest" Value="40" />
+        <Setter Property="FontSize" Value="13" />
+    </Style>
+
+    <!-- Quiet icon button (small actions like delete) -->
+    <Style x:Key="QuietButton" TargetType="Button">
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="TextColor" Value="{StaticResource ColorTextSecondary}" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="8,4" />
+        <Setter Property="FontSize" Value="13" />
+    </Style>
+
+    <!-- Sticky emergency stop (always visible, top of right panel) -->
+    <Style x:Key="EmergencyStopButton" TargetType="Button">
+        <Setter Property="BackgroundColor" Value="{StaticResource ColorDanger}" />
+        <Setter Property="TextColor" Value="White" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="HeightRequest" Value="56" />
+        <Setter Property="FontSize" Value="17" />
+        <Setter Property="FontAttributes" Value="Bold" />
+    </Style>
+
+    <!-- Form input fields -->
+    <Style TargetType="Entry">
+        <Setter Property="BackgroundColor" Value="{StaticResource ColorSurfaceHigh}" />
+        <Setter Property="TextColor" Value="{StaticResource ColorTextPrimary}" />
+        <Setter Property="PlaceholderColor" Value="{StaticResource ColorTextTertiary}" />
+        <Setter Property="FontSize" Value="13" />
+    </Style>
+
+    <Style TargetType="Picker">
+        <Setter Property="BackgroundColor" Value="{StaticResource ColorSurfaceHigh}" />
+        <Setter Property="TextColor" Value="{StaticResource ColorTextPrimary}" />
+        <Setter Property="TitleColor" Value="{StaticResource ColorTextTertiary}" />
+        <Setter Property="FontSize" Value="13" />
+    </Style>
+
+    <Style TargetType="Editor">
+        <Setter Property="BackgroundColor" Value="{StaticResource ColorSurfaceHigh}" />
+        <Setter Property="TextColor" Value="{StaticResource ColorTextPrimary}" />
+        <Setter Property="PlaceholderColor" Value="{StaticResource ColorTextTertiary}" />
+        <Setter Property="FontSize" Value="13" />
+    </Style>
+
+</ResourceDictionary>

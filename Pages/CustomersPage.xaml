@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:MyRoboticsInspector.ViewModels"
+             xmlns:m="clr-namespace:MyRoboticsInspector.Models"
+             x:Class="MyRoboticsInspector.Pages.CustomersPage"
+             x:DataType="vm:CustomersViewModel"
+             Title="{Binding Title}"
+             BackgroundColor="{StaticResource ColorPageBg}">
+
+    <Grid Padding="16" RowDefinitions="Auto,*,Auto" RowSpacing="12">
+
+        <!-- Header -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+            <VerticalStackLayout Grid.Column="0" Spacing="2">
+                <Label Text="MÜŞTERİLER" Style="{StaticResource SectionTitle}" />
+                <Label Text="Müşteri Listesi" FontSize="24" FontAttributes="Bold"
+                       TextColor="{StaticResource ColorTextPrimary}" />
+                <Label Style="{StaticResource Caption}">
+                    <Label.FormattedText>
+                        <FormattedString>
+                            <Span Text="{Binding Customers.Count}" FontAttributes="Bold" />
+                            <Span Text=" müşteri kayıtlı" />
+                        </FormattedString>
+                    </Label.FormattedText>
+                </Label>
+            </VerticalStackLayout>
+
+            <Button Grid.Column="1" Text="+  Yeni Müşteri"
+                    Style="{StaticResource PrimaryButton}"
+                    Padding="16,0" VerticalOptions="Center"
+                    Command="{Binding NewCommand}" />
+        </Grid>
+
+        <!-- List -->
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Customers}" SelectionMode="None">
+            <CollectionView.EmptyView>
+                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="12" Padding="40">
+                    <Label Text="👥" FontSize="48" HorizontalOptions="Center" />
+                    <Label Text="Henüz müşteri yok" Style="{StaticResource CardTitle}" HorizontalOptions="Center" />
+                    <Label Text="İlk müşterinizi ekleyerek başlayın."
+                           Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                    <Button Text="+ Yeni Müşteri" Style="{StaticResource PrimaryButton}"
+                            Padding="20,0" HorizontalOptions="Center"
+                            Command="{Binding NewCommand}" />
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="m:Customer">
+                    <Border Style="{StaticResource CardBorder}" Margin="0,0,0,8">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:CustomersViewModel}}, Path=EditCommand}"
+                                CommandParameter="{Binding .}" />
+                        </Border.GestureRecognizers>
+                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="12">
+                            <Border Grid.Column="0"
+                                    Background="{StaticResource ColorSurfaceHigh}"
+                                    StrokeShape="RoundRectangle 22"
+                                    HeightRequest="44" WidthRequest="44"
+                                    StrokeThickness="0">
+                                <Label Text="🏢" FontSize="20"
+                                       HorizontalOptions="Center" VerticalOptions="Center" />
+                            </Border>
+                            <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                <Label Text="{Binding Name}" Style="{StaticResource CardTitle}" />
+                                <HorizontalStackLayout Spacing="10">
+                                    <Label Style="{StaticResource Caption}"
+                                           IsVisible="{Binding Phone, Converter={StaticResource StringNotEmpty}}">
+                                        <Label.FormattedText>
+                                            <FormattedString>
+                                                <Span Text="📞 " />
+                                                <Span Text="{Binding Phone}" />
+                                            </FormattedString>
+                                        </Label.FormattedText>
+                                    </Label>
+                                    <Label Style="{StaticResource Caption}"
+                                           IsVisible="{Binding Email, Converter={StaticResource StringNotEmpty}}">
+                                        <Label.FormattedText>
+                                            <FormattedString>
+                                                <Span Text="✉ " />
+                                                <Span Text="{Binding Email}" />
+                                            </FormattedString>
+                                        </Label.FormattedText>
+                                    </Label>
+                                </HorizontalStackLayout>
+                            </VerticalStackLayout>
+                            <Button Grid.Column="2" Text="✎"
+                                    Style="{StaticResource QuietButton}" Padding="10,4"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:CustomersViewModel}}, Path=EditCommand}"
+                                    CommandParameter="{Binding .}" />
+                            <Button Grid.Column="3" Text="🗑"
+                                    Style="{StaticResource QuietButton}" Padding="10,4"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:CustomersViewModel}}, Path=DeleteCommand}"
+                                    CommandParameter="{Binding .}" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <Label Grid.Row="2" Text="{Binding StatusMessage}" Style="{StaticResource Caption}" />
+
+        <!-- ============== EDIT OVERLAY ============== -->
+        <Border Grid.Row="0" Grid.RowSpan="3"
+                IsVisible="{Binding IsEditing}"
+                Background="#dd000000"
+                Padding="24">
+            <ScrollView>
+                <VerticalStackLayout Spacing="12" MaximumWidthRequest="640" HorizontalOptions="Center">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Grid.Column="0" Text="Müşteri Bilgileri" FontSize="22" FontAttributes="Bold"
+                               TextColor="White" />
+                        <Button Grid.Column="1" Text="✕"
+                                Style="{StaticResource QuietButton}" Padding="14,6"
+                                Command="{Binding CancelCommand}" />
+                    </Grid>
+
+                    <Border Style="{StaticResource CardBorder}">
+                        <VerticalStackLayout Spacing="10">
+                            <VerticalStackLayout>
+                                <Label Text="Ad / Firma *" Style="{StaticResource Caption}" />
+                                <Entry Text="{Binding Editing.Name}" Placeholder="örn. Küçükçekmece Belediyesi" />
+                            </VerticalStackLayout>
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                                <VerticalStackLayout Grid.Column="0">
+                                    <Label Text="Telefon" Style="{StaticResource Caption}" />
+                                    <Entry Text="{Binding Editing.Phone}" Keyboard="Telephone" Placeholder="0212 ..." />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Column="1">
+                                    <Label Text="E-posta" Style="{StaticResource Caption}" />
+                                    <Entry Text="{Binding Editing.Email}" Keyboard="Email" Placeholder="fen@..." />
+                                </VerticalStackLayout>
+                            </Grid>
+                            <VerticalStackLayout>
+                                <Label Text="Adres" Style="{StaticResource Caption}" />
+                                <Entry Text="{Binding Editing.Address}" Placeholder="Tam adres" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout>
+                                <Label Text="Vergi No / TC" Style="{StaticResource Caption}" />
+                                <Entry Text="{Binding Editing.TaxNo}" Placeholder="Vergi numarası" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout>
+                                <Label Text="Notlar" Style="{StaticResource Caption}" />
+                                <Editor Text="{Binding Editing.Notes}" Placeholder="Özel notlar..." HeightRequest="100" />
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="10" Margin="0,4,0,0">
+                        <Button Grid.Column="0" Text="İptal"
+                                Style="{StaticResource SecondaryButton}"
+                                Command="{Binding CancelCommand}" />
+                        <Button Grid.Column="1" Text="✓ Kaydet"
+                                Style="{StaticResource SuccessButton}"
+                                Command="{Binding SaveCommand}" />
+                    </Grid>
+                </VerticalStackLayout>
+            </ScrollView>
+        </Border>
+    </Grid>
+</ContentPage>

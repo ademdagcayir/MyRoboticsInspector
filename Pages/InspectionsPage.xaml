@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:MyRoboticsInspector.ViewModels"
+             xmlns:m="clr-namespace:MyRoboticsInspector.Models"
+             x:Class="MyRoboticsInspector.Pages.InspectionsPage"
+             x:DataType="vm:InspectionsViewModel"
+             Title="{Binding Title}"
+             BackgroundColor="{StaticResource ColorPageBg}">
+
+    <Grid Padding="16" RowDefinitions="Auto,*,Auto" RowSpacing="12">
+
+        <VerticalStackLayout Grid.Row="0" Spacing="2">
+            <Label Text="İNCELEMELER" Style="{StaticResource SectionTitle}" />
+            <Label Text="Geçmiş İncelemeler" FontSize="24" FontAttributes="Bold"
+                   TextColor="{StaticResource ColorTextPrimary}" />
+            <Label Style="{StaticResource Caption}">
+                <Label.FormattedText>
+                    <FormattedString>
+                        <Span Text="{Binding Inspections.Count}" FontAttributes="Bold" />
+                        <Span Text=" inceleme · tüm projeler" />
+                    </FormattedString>
+                </Label.FormattedText>
+            </Label>
+        </VerticalStackLayout>
+
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Inspections}">
+            <CollectionView.EmptyView>
+                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="12" Padding="40">
+                    <Label Text="📋" FontSize="48" HorizontalOptions="Center" />
+                    <Label Text="Henüz inceleme yok" Style="{StaticResource CardTitle}" HorizontalOptions="Center" />
+                    <Label Text="Canlı sayfadan yeni bir inceleme başlatın."
+                           Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="m:Inspection">
+                    <Border Style="{StaticResource CardBorder}" Margin="0,0,0,8">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:InspectionsViewModel}}, Path=OpenDetailCommand}"
+                                CommandParameter="{Binding .}" />
+                        </Border.GestureRecognizers>
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                            <VerticalStackLayout Grid.Column="0" Spacing="4">
+                                <HorizontalStackLayout Spacing="10">
+                                    <Label Text="{Binding ChannelCode, TargetNullValue='(kod yok)'}"
+                                           Style="{StaticResource CardTitle}" />
+                                    <Label Text="{Binding StartedAt, StringFormat='{0:dd.MM.yyyy HH:mm}'}"
+                                           Style="{StaticResource Caption}" VerticalOptions="Center" />
+                                </HorizontalStackLayout>
+                                <HorizontalStackLayout Spacing="14">
+                                    <Label Style="{StaticResource Caption}">
+                                        <Label.FormattedText>
+                                            <FormattedString>
+                                                <Span Text="📏 " />
+                                                <Span Text="{Binding DistanceMeters, StringFormat='{0:0.0} m', TargetNullValue='—'}"
+                                                      FontAttributes="Bold" TextColor="{StaticResource ColorTextPrimary}" />
+                                            </FormattedString>
+                                        </Label.FormattedText>
+                                    </Label>
+                                    <Label Style="{StaticResource Caption}"
+                                           IsVisible="{Binding Street, Converter={StaticResource StringNotEmpty}}">
+                                        <Label.FormattedText>
+                                            <FormattedString>
+                                                <Span Text="📍 " />
+                                                <Span Text="{Binding Street}" />
+                                            </FormattedString>
+                                        </Label.FormattedText>
+                                    </Label>
+                                </HorizontalStackLayout>
+                                <Label Text="{Binding Notes}" Style="{StaticResource Caption}"
+                                       LineBreakMode="TailTruncation" MaxLines="1"
+                                       IsVisible="{Binding Notes, Converter={StaticResource StringNotEmpty}}" />
+                            </VerticalStackLayout>
+                            <Button Grid.Column="1" Text="Detay"
+                                    Style="{StaticResource SecondaryButton}" Padding="14,0"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:InspectionsViewModel}}, Path=OpenDetailCommand}"
+                                    CommandParameter="{Binding .}" />
+                            <Button Grid.Column="2" Text="📄 PDF"
+                                    Style="{StaticResource PrimaryButton}" Padding="14,0"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:InspectionsViewModel}}, Path=GenerateReportCommand}"
+                                    CommandParameter="{Binding .}" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <Label Grid.Row="2" Text="{Binding StatusMessage}" Style="{StaticResource Caption}" />
+    </Grid>
+</ContentPage>

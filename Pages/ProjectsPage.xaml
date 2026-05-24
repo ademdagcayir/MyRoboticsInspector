@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:MyRoboticsInspector.ViewModels"
+             x:Class="MyRoboticsInspector.Pages.ProjectsPage"
+             x:DataType="vm:ProjectsViewModel"
+             Title="{Binding Title}"
+             BackgroundColor="{StaticResource ColorPageBg}">
+
+    <Grid Padding="16" RowDefinitions="Auto,*,Auto" RowSpacing="12">
+
+        <!-- ============== HEADER ============== -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+            <VerticalStackLayout Grid.Column="0" Spacing="2">
+                <Label Text="PROJELER" Style="{StaticResource SectionTitle}" />
+                <Label Text="Tüm projeler" FontSize="24" FontAttributes="Bold"
+                       TextColor="{StaticResource ColorTextPrimary}" />
+                <Label Style="{StaticResource Caption}">
+                    <Label.FormattedText>
+                        <FormattedString>
+                            <Span Text="{Binding Projects.Count}" FontAttributes="Bold" TextColor="{StaticResource ColorTextSecondary}" />
+                            <Span Text=" proje" />
+                        </FormattedString>
+                    </Label.FormattedText>
+                </Label>
+            </VerticalStackLayout>
+
+            <Button Grid.Column="1" Text="+  Yeni Proje"
+                    Style="{StaticResource PrimaryButton}"
+                    Padding="16,0" VerticalOptions="Center"
+                    Command="{Binding NewProjectCommand}" />
+        </Grid>
+
+        <!-- ============== LIST ============== -->
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Projects}" SelectionMode="None">
+            <CollectionView.EmptyView>
+                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="12">
+                    <Label Text="📂" FontSize="48" HorizontalOptions="Center" />
+                    <Label Text="Henüz proje yok" Style="{StaticResource CardTitle}" HorizontalOptions="Center" />
+                    <Label Text="İlk projeyi oluşturarak başla."
+                           Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                    <Button Text="+ Yeni Proje" Style="{StaticResource PrimaryButton}"
+                            Padding="20,0" HorizontalOptions="Center"
+                            Command="{Binding NewProjectCommand}" />
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="vm:ProjectListItem">
+                    <Border Style="{StaticResource CardBorder}" Margin="0,0,0,8">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ProjectsViewModel}}, Path=OpenChannelsCommand}"
+                                CommandParameter="{Binding .}" />
+                        </Border.GestureRecognizers>
+
+                        <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="6">
+
+                            <!-- Title + customer -->
+                            <VerticalStackLayout Grid.Column="0" Grid.Row="0" Spacing="2">
+                                <Label Text="{Binding Project.Title}" Style="{StaticResource CardTitle}" />
+                                <Label Text="{Binding CustomerName}" Style="{StaticResource Caption}" />
+                            </VerticalStackLayout>
+
+                            <!-- Quick actions -->
+                            <Button Grid.Column="1" Grid.Row="0" Text="✎"
+                                    Style="{StaticResource QuietButton}"
+                                    Padding="10,4" VerticalOptions="Start"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ProjectsViewModel}}, Path=EditCommand}"
+                                    CommandParameter="{Binding .}" />
+                            <Button Grid.Column="2" Grid.Row="0" Text="🗑"
+                                    Style="{StaticResource QuietButton}"
+                                    Padding="10,4" VerticalOptions="Start"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ProjectsViewModel}}, Path=DeleteCommand}"
+                                    CommandParameter="{Binding .}" />
+
+                            <!-- Date + Hakediş badge row -->
+                            <HorizontalStackLayout Grid.Column="0" Grid.Row="1" Grid.ColumnSpan="3" Spacing="10">
+                                <Label Style="{StaticResource Caption}">
+                                    <Label.FormattedText>
+                                        <FormattedString>
+                                            <Span Text="📅 " />
+                                            <Span Text="{Binding Project.ProjectDate, StringFormat='{0:dd.MM.yyyy}'}"
+                                                  FontAttributes="Bold" TextColor="{StaticResource ColorTextPrimary}" />
+                                        </FormattedString>
+                                    </Label.FormattedText>
+                                </Label>
+                                <Label Text="{Binding Project.HakedisNo, StringFormat='Hakediş: {0}', TargetNullValue=''}"
+                                       Style="{StaticResource Caption}"
+                                       IsVisible="{Binding Project.HakedisNo, Converter={StaticResource StringNotEmpty}}" />
+                            </HorizontalStackLayout>
+
+                            <!-- Location chip row hidden — moved to row 2 -->
+
+                            <!-- Stage/Purpose + channel count row -->
+                            <Grid Grid.Column="0" Grid.Row="2" Grid.ColumnSpan="3" ColumnDefinitions="*,Auto">
+                                <HorizontalStackLayout Grid.Column="0" Spacing="6">
+                                    <Border Stroke="{StaticResource ColorBorderStrong}" StrokeThickness="1"
+                                            StrokeShape="RoundRectangle 4" Padding="6,2">
+                                        <Label Text="{Binding StageLabel}" FontSize="10"
+                                               TextColor="{StaticResource ColorTextSecondary}" />
+                                    </Border>
+                                    <Border Stroke="{StaticResource ColorBorderStrong}" StrokeThickness="1"
+                                            StrokeShape="RoundRectangle 4" Padding="6,2">
+                                        <Label Text="{Binding PurposeLabel}" FontSize="10"
+                                               TextColor="{StaticResource ColorTextSecondary}" />
+                                    </Border>
+                                </HorizontalStackLayout>
+
+                                <HorizontalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                                    <Label Text="📁" FontSize="11" VerticalOptions="Center" />
+                                    <Label FontSize="12" TextColor="{StaticResource ColorTextSecondary}">
+                                        <Label.FormattedText>
+                                            <FormattedString>
+                                                <Span Text="{Binding ChannelCount}" FontAttributes="Bold" />
+                                                <Span Text=" inceleme" />
+                                            </FormattedString>
+                                        </Label.FormattedText>
+                                    </Label>
+                                </HorizontalStackLayout>
+                            </Grid>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <Label Grid.Row="2" Text="{Binding StatusMessage}" Style="{StaticResource Caption}" />
+    </Grid>
+</ContentPage>

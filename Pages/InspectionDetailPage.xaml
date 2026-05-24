@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:MyRoboticsInspector.ViewModels"
+             xmlns:m="clr-namespace:MyRoboticsInspector.Models"
+             x:Class="MyRoboticsInspector.Pages.InspectionDetailPage"
+             x:DataType="vm:InspectionDetailViewModel"
+             Title="{Binding Title}"
+             BackgroundColor="{StaticResource ColorPageBg}">
+
+    <Grid Padding="16" RowDefinitions="Auto,*,Auto" RowSpacing="12">
+
+        <!-- ============== HERO HEADER ============== -->
+        <Border Grid.Row="0" Style="{StaticResource CardBorder}">
+            <VerticalStackLayout Spacing="8">
+                <Label Text="İNCELEME DETAYI" Style="{StaticResource SectionTitle}" />
+                <Grid ColumnDefinitions="*,Auto">
+                    <Label Grid.Column="0" Text="{Binding Title}" FontSize="22" FontAttributes="Bold"
+                           TextColor="{StaticResource ColorTextPrimary}" LineBreakMode="TailTruncation" />
+                    <Border Grid.Column="1" Padding="10,3" StrokeShape="RoundRectangle 12"
+                            Stroke="{Binding IsBackedUp, Converter={StaticResource BoolToBackupColor}}"
+                            Background="Transparent" VerticalOptions="Center">
+                        <Label Text="{Binding BackupBadgeText}" FontSize="11" FontAttributes="Bold"
+                               TextColor="{Binding IsBackedUp, Converter={StaticResource BoolToBackupColor}}" />
+                    </Border>
+                </Grid>
+                <Label Text="{Binding Summary}" Style="{StaticResource Caption}" />
+                <Label Text="{Binding Inspection.Notes}" Style="{StaticResource BodyText}"
+                       IsVisible="{Binding Inspection.Notes, Converter={StaticResource StringNotEmpty}}" />
+
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,8,0,0">
+                    <Button Grid.Column="0" Text="📄  PDF Rapor Üret"
+                            Style="{StaticResource PrimaryButton}"
+                            Command="{Binding GenerateReportCommand}" />
+                    <Button Grid.Column="1" Text="🎬  Videoyu İzle"
+                            Style="{StaticResource SecondaryButton}"
+                            Command="{Binding ReviewVideoCommand}" />
+                </Grid>
+            </VerticalStackLayout>
+        </Border>
+
+        <!-- ============== DEFECT LIST ============== -->
+        <Grid Grid.Row="1" RowDefinitions="Auto,*" RowSpacing="8">
+            <HorizontalStackLayout Grid.Row="0" Spacing="10">
+                <Label Text="KUSURLAR" Style="{StaticResource SectionTitle}" />
+                <Border Background="{StaticResource ColorSurfaceHigh}"
+                        StrokeShape="RoundRectangle 8" Padding="6,1" StrokeThickness="0">
+                    <Label Text="{Binding Defects.Count}" FontSize="11" FontAttributes="Bold"
+                           TextColor="{StaticResource ColorTextSecondary}" />
+                </Border>
+            </HorizontalStackLayout>
+
+            <CollectionView Grid.Row="1" ItemsSource="{Binding Defects}">
+                <CollectionView.EmptyView>
+                    <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="8" Padding="40">
+                        <Label Text="✅" FontSize="40" HorizontalOptions="Center" />
+                        <Label Text="Henüz kusur işaretlenmemiş"
+                               Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                    </VerticalStackLayout>
+                </CollectionView.EmptyView>
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="m:Defect">
+                        <Border Style="{StaticResource CardBorder}" Margin="0,0,0,8">
+                            <Grid ColumnDefinitions="120,*,Auto" ColumnSpacing="12">
+                                <Image Grid.Column="0" Source="{Binding PhotoPath}"
+                                       HeightRequest="90" WidthRequest="120" Aspect="AspectFill"
+                                       BackgroundColor="{StaticResource ColorSurfaceHigh}" />
+                                <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                                    <Label FontAttributes="Bold">
+                                        <Label.FormattedText>
+                                            <FormattedString>
+                                                <Span Text="{Binding IskiCode, TargetNullValue=''}"
+                                                      TextColor="{StaticResource ColorWarning}" FontAttributes="Bold" />
+                                                <Span Text="  " />
+                                                <Span Text="{Binding Severity}"
+                                                      TextColor="{StaticResource ColorTextPrimary}" />
+                                                <Span Text=" • " TextColor="{StaticResource ColorTextTertiary}" />
+                                                <Span Text="{Binding Type}"
+                                                      TextColor="{StaticResource ColorTextPrimary}" />
+                                            </FormattedString>
+                                        </Label.FormattedText>
+                                    </Label>
+                                    <HorizontalStackLayout Spacing="12">
+                                        <Label Style="{StaticResource Caption}">
+                                            <Label.FormattedText>
+                                                <FormattedString>
+                                                    <Span Text="📏 " />
+                                                    <Span Text="{Binding DistanceMeters, StringFormat='{0:0.0} m', TargetNullValue='—'}"
+                                                          FontAttributes="Bold" TextColor="{StaticResource ColorTextPrimary}" />
+                                                </FormattedString>
+                                            </Label.FormattedText>
+                                        </Label>
+                                        <Label Style="{StaticResource Caption}">
+                                            <Label.FormattedText>
+                                                <FormattedString>
+                                                    <Span Text="⏱ " />
+                                                    <Span Text="{Binding VideoTimestampMs, Converter={StaticResource MsToTimestamp}}" />
+                                                </FormattedString>
+                                            </Label.FormattedText>
+                                        </Label>
+                                    </HorizontalStackLayout>
+                                    <Label Text="{Binding Description}" Style="{StaticResource Caption}"
+                                           LineBreakMode="TailTruncation" MaxLines="2" />
+                                </VerticalStackLayout>
+                                <Button Grid.Column="2" Text="🗑"
+                                        Style="{StaticResource QuietButton}" Padding="10,4"
+                                        VerticalOptions="Start"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:InspectionDetailViewModel}}, Path=DeleteDefectCommand}"
+                                        CommandParameter="{Binding .}" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </Grid>
+
+        <Label Grid.Row="2" Text="{Binding StatusMessage}" Style="{StaticResource Caption}" />
+    </Grid>
+</ContentPage>

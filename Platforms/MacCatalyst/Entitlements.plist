@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- App Sandbox — Mac App Store dağıtımı için gerekli -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+
+	<!-- RTSP kamera + MQTT broker bağlantıları için outgoing network -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+
+	<!-- Logo seçici (MediaPicker) + kullanıcının seçtiği klasörlere yazma (StoragePath) -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+
+	<!-- OneDrive klasörünü tarayabilmek için Downloads ve Documents'a read-write -->
+	<key>com.apple.security.files.downloads.read-write</key>
+	<true/>
+</dict>
+</plist>

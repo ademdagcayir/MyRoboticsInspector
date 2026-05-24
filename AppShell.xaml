@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Shell
+    x:Class="MyRoboticsInspector.AppShell"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:local="clr-namespace:MyRoboticsInspector"
+    xmlns:pages="clr-namespace:MyRoboticsInspector.Pages"
+    Title="MyRoboticsInspector"
+    FlyoutBehavior="Flyout"
+    FlyoutBackgroundColor="{StaticResource ColorSurfaceSubtle}">
+
+    <Shell.FlyoutHeader>
+        <Border HeightRequest="130" Background="{StaticResource ColorSurface}"
+                Stroke="{StaticResource ColorBorder}" StrokeThickness="0,0,0,1">
+            <VerticalStackLayout VerticalOptions="Center" Padding="24,0" Spacing="2">
+                <Label Text="My Robotics" FontSize="22" FontAttributes="Bold"
+                       TextColor="{StaticResource ColorTextPrimary}" />
+                <Label Text="Kanal Görüntüleme Sistemi" FontSize="12"
+                       TextColor="{StaticResource ColorTextSecondary}" />
+                <Label Text="EN 13508-2:2003+A1:2011" FontSize="10"
+                       TextColor="{StaticResource ColorAccent}" Margin="0,4,0,0" />
+            </VerticalStackLayout>
+        </Border>
+    </Shell.FlyoutHeader>
+
+    <FlyoutItem Title="Canlı Görüntü" Icon="dotnet_bot.png">
+        <ShellContent ContentTemplate="{DataTemplate local:MainPage}" Route="live" />
+    </FlyoutItem>
+
+    <FlyoutItem Title="Projeler" Icon="dotnet_bot.png">
+        <ShellContent ContentTemplate="{DataTemplate pages:ProjectsPage}" Route="projects" />
+    </FlyoutItem>
+
+    <FlyoutItem Title="İncelemeler" Icon="dotnet_bot.png">
+        <ShellContent ContentTemplate="{DataTemplate pages:InspectionsPage}" Route="inspections" />
+    </FlyoutItem>
+
+    <FlyoutItem Title="Müşteriler" Icon="dotnet_bot.png">
+        <ShellContent ContentTemplate="{DataTemplate pages:CustomersPage}" Route="customers" />
+    </FlyoutItem>
+
+    <FlyoutItem Title="Ayarlar" Icon="dotnet_bot.png">
+        <ShellContent ContentTemplate="{DataTemplate pages:SettingsPage}" Route="settings" />
+    </FlyoutItem>
+
+</Shell>

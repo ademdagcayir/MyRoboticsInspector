@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:MyRoboticsInspector.ViewModels"
+             x:Class="MyRoboticsInspector.Pages.ProjectChannelsPage"
+             x:DataType="vm:ProjectChannelsViewModel"
+             Title="{Binding Title}"
+             BackgroundColor="{StaticResource ColorPageBg}">
+
+    <Grid RowDefinitions="Auto,*,Auto">
+
+        <!-- ============== STICKY HEADER ============== -->
+        <Border Grid.Row="0" Background="{StaticResource ColorSurface}"
+                Stroke="{StaticResource ColorBorder}" StrokeThickness="0,0,0,1"
+                Padding="16,12">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="12">
+                <Button Grid.Column="0" Text="‹" FontSize="22"
+                        Style="{StaticResource QuietButton}"
+                        VerticalOptions="Center" Padding="14,4"
+                        Command="{Binding BackToProjectsCommand}" />
+
+                <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                    <Label Text="PROJE" Style="{StaticResource SectionTitle}" />
+                    <Label Text="{Binding Project.Title, TargetNullValue='Kanallar'}"
+                           FontSize="18" FontAttributes="Bold"
+                           TextColor="{StaticResource ColorTextPrimary}"
+                           LineBreakMode="TailTruncation" MaxLines="1" />
+                    <Label Text="{Binding SummaryLabel}" Style="{StaticResource Caption}" />
+                </VerticalStackLayout>
+
+                <Button Grid.Column="2" Text="✎  Projeyi Düzenle"
+                        Style="{StaticResource SecondaryButton}"
+                        Padding="14,0"
+                        Command="{Binding BindingContext.OpenProjectFormCommand, Source={x:Reference Root}}" />
+                <Button Grid.Column="3" Text="+  Yeni Kanal"
+                        Style="{StaticResource PrimaryButton}"
+                        Padding="16,0"
+                        Command="{Binding NewChannelCommand}" />
+            </Grid>
+        </Border>
+
+        <!-- ============== CHANNELS LIST ============== -->
+        <CollectionView Grid.Row="1" x:Name="Root" ItemsSource="{Binding Channels}"
+                        SelectionMode="None" Margin="16,12,16,0">
+            <CollectionView.EmptyView>
+                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="12" Padding="40">
+                    <Label Text="🛠️" FontSize="48" HorizontalOptions="Center" />
+                    <Label Text="Bu projede henüz kanal yok" Style="{StaticResource CardTitle}" HorizontalOptions="Center" />
+                    <Label Text="Yeni bir kanal ekleyin veya canlı sayfadan inceleme başlatın."
+                           Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                    <Button Text="+ Yeni Kanal" Style="{StaticResource PrimaryButton}"
+                            Padding="20,0" HorizontalOptions="Center"
+                            Command="{Binding NewChannelCommand}" />
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="vm:ChannelListItem">
+                    <Border Style="{StaticResource CardBorder}" Margin="0,0,0,8">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ProjectChannelsViewModel}}, Path=OpenDetailCommand}"
+                                CommandParameter="{Binding .}" />
+                        </Border.GestureRecognizers>
+
+                        <Grid ColumnDefinitions="6,*,Auto" ColumnSpacing="12">
+
+                            <!-- Status indicator stripe (sol renk şerit) -->
+                            <BoxView Grid.Column="0" Color="{Binding StatusColor}"
+                                     CornerRadius="3" />
+
+                            <!-- Body -->
+                            <VerticalStackLayout Grid.Column="1" Spacing="6">
+
+                                <!-- Top row: channel code + status pill -->
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <Label Grid.Column="0" Text="{Binding Inspection.ChannelCode, TargetNullValue='(kod yok)'}"
+                                           Style="{StaticResource CardTitle}" />
+                                    <Border Grid.Column="1" Background="{Binding StatusColor}"
+                                            StrokeThickness="0" StrokeShape="RoundRectangle 4"
+                                            Padding="8,2">
+                                        <Label Text="{Binding StatusLabel}" FontSize="10"
+                                               FontAttributes="Bold" TextColor="White" />
+                                    </Border>
+                                </Grid>
+
+                                <!-- Manhole flow (giriş → çıkış) -->
+                                <Label Text="{Binding ManholeFlow}" FontSize="13"
+                                       TextColor="{StaticResource ColorTextPrimary}"
+                                       FontAttributes="Bold" />
+
+                                <!-- Street + flow direction -->
+                                <HorizontalStackLayout Spacing="10">
+                                    <Label Style="{StaticResource Caption}">
+                                        <Label.FormattedText>
+                                            <FormattedString>
+                                                <Span Text="📍 " />
+                                                <Span Text="{Binding Inspection.Street, TargetNullValue='—'}" />
+                                            </FormattedString>
+                                        </Label.FormattedText>
+                                    </Label>
+                                    <Label Text="·" TextColor="{StaticResource ColorTextTertiary}" />
+                                    <Label Style="{StaticResource Caption}"
+                                           TextColor="{Binding IsReverse, Converter={StaticResource BoolToFlowColor}}">
+                                        <Label.FormattedText>
+                                            <FormattedString>
+                                                <Span Text="↳ " />
+                                                <Span Text="{Binding FlowLabel}" />
+                                            </FormattedString>
+                                        </Label.FormattedText>
+                                    </Label>
+                                </HorizontalStackLayout>
+
+                                <!-- Metraj + date + defect badge -->
+                                <HorizontalStackLayout Spacing="14">
+                                    <Label Style="{StaticResource Caption}">
+                                        <Label.FormattedText>
+                                            <FormattedString>
+                                                <Span Text="📏 " />
+                                                <Span Text="{Binding Inspection.DistanceMeters, StringFormat='{0:0.0} m', TargetNullValue='—'}"
+                                                      FontAttributes="Bold" TextColor="{StaticResource ColorTextPrimary}" />
+                                            </FormattedString>
+                                        </Label.FormattedText>
+                                    </Label>
+                                    <Label Style="{StaticResource Caption}">
+                                        <Label.FormattedText>
+                                            <FormattedString>
+                                                <Span Text="📅 " />
+                                                <Span Text="{Binding Inspection.StartedAt, StringFormat='{0:dd.MM.yyyy}'}" />
+                                            </FormattedString>
+                                        </Label.FormattedText>
+                                    </Label>
+                                    <Label Style="{StaticResource Caption}" IsVisible="{Binding DefectCount, Converter={StaticResource IntToBool}}">
+                                        <Label.FormattedText>
+                                            <FormattedString>
+                                                <Span Text="⚠ " />
+                                                <Span Text="{Binding DefectCount}" FontAttributes="Bold"
+                                                      TextColor="{StaticResource ColorWarning}" />
+                                                <Span Text=" kusur" />
+                                            </FormattedString>
+                                        </Label.FormattedText>
+                                    </Label>
+                                </HorizontalStackLayout>
+                            </VerticalStackLayout>
+
+                            <!-- Right side actions -->
+                            <VerticalStackLayout Grid.Column="2" Spacing="6" VerticalOptions="Center">
+                                <Button Text="▶  Oynat"
+                                        Style="{StaticResource SecondaryButton}"
+                                        Padding="12,0" FontSize="12"
+                                        IsEnabled="{Binding HasVideo}"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ProjectChannelsViewModel}}, Path=PlayVideoCommand}"
+                                        CommandParameter="{Binding .}" />
+                                <Button Text="✎  Düzenle"
+                                        Style="{StaticResource QuietButton}"
+                                        FontSize="12"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ProjectChannelsViewModel}}, Path=EditCommand}"
+                                        CommandParameter="{Binding .}" />
+                                <Button Text="🗑"
+                                        Style="{StaticResource QuietButton}"
+                                        Padding="8,4"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ProjectChannelsViewModel}}, Path=DeleteCommand}"
+                                        CommandParameter="{Binding .}" />
+                            </VerticalStackLayout>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <!-- ============== STATUS ============== -->
+        <Label Grid.Row="2" Text="{Binding StatusMessage}"
+               Style="{StaticResource Caption}" Padding="16,8" />
+    </Grid>
+</ContentPage>

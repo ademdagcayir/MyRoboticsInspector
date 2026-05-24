@@ -1,0 +1,53 @@
+# .NET / MSBuild
+obj/
+bin/
+*.user
+.vs/
+*.suo
+*.userosscache
+*.sln.docstates
+
+# MAUI / Xamarin
+**/.DS_Store
+**/._*
+**/*.orig.*
+**/*.lock.json
+
+# Publish output
+publish/
+Releases/
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+nuget.props
+.nuget/
+
+# Rider
+.idea/
+*.sln.iml
+
+# Visual Studio Code
+.vscode/
+
+# Test results
+TestResults/
+
+# FFmpeg overlay temp files
+*.overlay.txt
+*.overlay.tmp
+
+# Database files (dev)
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini

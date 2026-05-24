@@ -1,0 +1,484 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vlc="clr-namespace:LibVLCSharp.MAUI;assembly=LibVLCSharp.MAUI"
+             xmlns:vm="clr-namespace:MyRoboticsInspector.ViewModels"
+             xmlns:m="clr-namespace:MyRoboticsInspector.Models"
+             x:Class="MyRoboticsInspector.MainPage"
+             x:DataType="vm:LiveViewModel"
+             Title="{Binding Title}"
+             BackgroundColor="{StaticResource ColorPageBg}">
+
+    <Grid Padding="12" RowDefinitions="*,Auto" ColumnDefinitions="*,300" ColumnSpacing="12">
+
+        <!-- ============== VIDEO + OVERLAY ============== -->
+        <Grid Grid.Row="0" Grid.Column="0">
+            <Border Stroke="{StaticResource ColorBorder}" StrokeThickness="1"
+                    Background="Black" StrokeShape="RoundRectangle 10">
+                <vlc:VideoView x:Name="VideoView"
+                               MediaPlayer="{Binding MediaPlayer}"
+                               HorizontalOptions="Fill"
+                               VerticalOptions="Fill" />
+            </Border>
+
+            <!-- OVERLAY LAYER (canlı XAML — kayda gömülen değil) -->
+            <Grid Padding="18" InputTransparent="True"
+                  RowDefinitions="Auto,*,Auto"
+                  ColumnDefinitions="*,*">
+
+                <VerticalStackLayout Grid.Row="0" Grid.Column="0" Spacing="2"
+                                     HorizontalOptions="Start" VerticalOptions="Start">
+                    <Label Text="{Binding CompanyName}" TextColor="#cccccc" FontSize="11" />
+                    <Label Text="{Binding ProjectName}" TextColor="{StaticResource ColorHighlight}"
+                           FontSize="17" FontAttributes="Bold" />
+                    <Label Text="{Binding Neighborhood, StringFormat='Mahalle: {0}'}" TextColor="White" FontSize="13"
+                           IsVisible="{Binding Neighborhood, Converter={StaticResource StringNotEmpty}}" />
+                    <Label Text="{Binding Street, StringFormat='Sokak: {0}'}" TextColor="White" FontSize="13"
+                           IsVisible="{Binding Street, Converter={StaticResource StringNotEmpty}}" />
+                    <Label Text="{Binding OperatorName, StringFormat='Operatör: {0}'}" TextColor="#cccccc" FontSize="11"
+                           IsVisible="{Binding OperatorName, Converter={StaticResource StringNotEmpty}}" />
+                </VerticalStackLayout>
+
+                <VerticalStackLayout Grid.Row="0" Grid.Column="1" Spacing="2"
+                                     HorizontalOptions="End" VerticalOptions="Start">
+                    <Label Text="{Binding NowDisplay}" TextColor="White" FontSize="14" HorizontalOptions="End" />
+                    <Label Text="{Binding ElapsedDisplay, StringFormat='Süre: {0}'}" TextColor="#ffcc66" FontSize="13" HorizontalOptions="End" />
+                    <Label Text="● REC" TextColor="{StaticResource ColorRecord}" FontSize="14" FontAttributes="Bold" HorizontalOptions="End"
+                           IsVisible="{Binding IsRecording}" />
+                    <Label Text="🔍 İNCELEME AKTİF" TextColor="{StaticResource ColorSuccess}" FontSize="12" FontAttributes="Bold" HorizontalOptions="End"
+                           IsVisible="{Binding IsInspecting}" />
+                </VerticalStackLayout>
+
+                <VerticalStackLayout Grid.Row="2" Grid.Column="0" Spacing="0"
+                                     HorizontalOptions="Start" VerticalOptions="End">
+                    <Label Text="Mesafe" TextColor="#cccccc" FontSize="11" />
+                    <Label Text="{Binding Telemetry.DistanceMeters, StringFormat='{0:0.00} m', TargetNullValue='— m'}"
+                           TextColor="{StaticResource ColorHighlight}" FontSize="34" FontAttributes="Bold" />
+                </VerticalStackLayout>
+
+                <VerticalStackLayout Grid.Row="2" Grid.Column="1" Spacing="2"
+                                     HorizontalOptions="End" VerticalOptions="End">
+                    <Label Text="{Binding Telemetry.TiltDegrees, StringFormat='Eğim: {0:0.0}°', TargetNullValue=''}"
+                           TextColor="White" FontSize="12" HorizontalOptions="End" />
+                    <Label Text="{Binding Telemetry.PressureBar, StringFormat='Basınç: {0:0.0} bar', TargetNullValue=''}"
+                           TextColor="White" FontSize="12" HorizontalOptions="End" />
+                    <Label Text="{Binding Telemetry.TemperatureC, StringFormat='Sıcaklık: {0:0.0}°C', TargetNullValue=''}"
+                           TextColor="White" FontSize="12" HorizontalOptions="End" />
+                    <Label Text="{Binding Telemetry.BatteryPercent, StringFormat='Batarya: {0:0}%', TargetNullValue=''}"
+                           TextColor="White" FontSize="12" HorizontalOptions="End" />
+                    <Label Text="⚠ GAZ" TextColor="{StaticResource ColorDanger}" FontSize="14" FontAttributes="Bold" HorizontalOptions="End"
+                           IsVisible="{Binding Telemetry.GasAlarm}" />
+                    <Label Text="⚠ SU" TextColor="Aqua" FontSize="14" FontAttributes="Bold" HorizontalOptions="End"
+                           IsVisible="{Binding Telemetry.WaterAlarm}" />
+                </VerticalStackLayout>
+            </Grid>
+        </Grid>
+
+        <!-- ============== RIGHT PANEL ============== -->
+        <Grid Grid.Row="0" Grid.Column="1" RowDefinitions="Auto,*" RowSpacing="10">
+
+            <!-- STICKY E-STOP — never scrolls -->
+            <Button Grid.Row="0" Text="■ ACİL DURDURMA"
+                    Style="{StaticResource EmergencyStopButton}"
+                    Command="{Binding EmergencyStopCommand}" />
+
+            <!-- Scrollable panel -->
+            <ScrollView Grid.Row="1">
+                <VerticalStackLayout Spacing="10">
+
+                    <!-- ============== PRIMARY CONTEXT-AWARE CTA ============== -->
+                    <Border Style="{Binding IsInspecting, Converter={StaticResource BoolToCardStyle}}">
+                        <VerticalStackLayout Spacing="10">
+
+                            <!-- State 1: not inspecting → pick customer + start -->
+                            <VerticalStackLayout Spacing="8"
+                                                 IsVisible="{Binding IsInspecting, Converter={StaticResource InvertedBool}}">
+                                <Label Text="İNCELEME" Style="{StaticResource SectionTitle}" />
+                                <Label Text="Yeni İnceleme" Style="{StaticResource CardTitle}" />
+                                <Label Text="Bir müşteri seçin, hazır olduğunuzda başlatın."
+                                       Style="{StaticResource Caption}" />
+                                <Picker Title="Müşteri seç"
+                                        ItemsSource="{Binding Customers}"
+                                        ItemDisplayBinding="{Binding Name}"
+                                        SelectedItem="{Binding SelectedCustomer}" />
+                                <Button Text="▶  İncelemeyi Başlat"
+                                        Style="{StaticResource SuccessButton}"
+                                        Command="{Binding StartInspectionCommand}"
+                                        IsEnabled="{Binding CanStartInspection}" />
+                            </VerticalStackLayout>
+
+                            <!-- State 2: inspecting → big "+ Defect" + finish -->
+                            <VerticalStackLayout Spacing="10"
+                                                 IsVisible="{Binding IsInspecting}">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <VerticalStackLayout Grid.Column="0">
+                                        <Label Text="İNCELEME AKTİF" Style="{StaticResource SectionTitle}"
+                                               TextColor="{StaticResource ColorSuccess}" />
+                                        <Label Text="{Binding ActiveInspection.StartedAt, StringFormat='Başlangıç: {0:HH:mm}'}"
+                                               Style="{StaticResource Caption}" />
+                                    </VerticalStackLayout>
+                                    <Label Grid.Column="1" Text="{Binding DefectCount, StringFormat='{0}'}"
+                                           FontSize="28" FontAttributes="Bold"
+                                           TextColor="{StaticResource ColorWarning}"
+                                           VerticalOptions="Center" />
+                                </Grid>
+                                <Button Text="⚠  KUSUR EKLE"
+                                        Style="{StaticResource WarningButton}"
+                                        HeightRequest="60" FontSize="17"
+                                        Command="{Binding MarkDefectCommand}" />
+                                <Button Text="İncelemeyi Bitir"
+                                        Style="{StaticResource SecondaryButton}"
+                                        Command="{Binding FinishInspectionCommand}" />
+                            </VerticalStackLayout>
+
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- ============== DEFECT MINI-LIST ============== -->
+                    <Border Style="{StaticResource CardBorder}"
+                            IsVisible="{Binding IsInspecting}">
+                        <VerticalStackLayout Spacing="6">
+                            <Label Text="EKLENEN KUSURLAR" Style="{StaticResource SectionTitle}" />
+                            <CollectionView ItemsSource="{Binding ActiveDefects}"
+                                            MaximumHeightRequest="220"
+                                            SelectionMode="None">
+                                <CollectionView.EmptyView>
+                                    <Label Text="Henüz kusur yok"
+                                           Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                                </CollectionView.EmptyView>
+                                <CollectionView.ItemTemplate>
+                                    <DataTemplate x:DataType="m:Defect">
+                                        <Border Padding="6" Margin="0,0,0,4"
+                                                Stroke="{StaticResource ColorBorder}" StrokeThickness="1"
+                                                StrokeShape="RoundRectangle 6"
+                                                Background="{StaticResource ColorSurfaceHigh}">
+                                            <Border.GestureRecognizers>
+                                                <TapGestureRecognizer
+                                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:LiveViewModel}}, Path=PreviewDefectAtCommand}"
+                                                    CommandParameter="{Binding .}" />
+                                            </Border.GestureRecognizers>
+                                            <Grid ColumnDefinitions="50,*,Auto" ColumnSpacing="6">
+                                                <Image Grid.Column="0" Source="{Binding PhotoPath}"
+                                                       HeightRequest="36" WidthRequest="50"
+                                                       Aspect="AspectFill" BackgroundColor="#222" />
+                                                <VerticalStackLayout Grid.Column="1" Spacing="0" VerticalOptions="Center">
+                                                    <Label TextColor="White" FontSize="12" FontAttributes="Bold">
+                                                        <Label.FormattedText>
+                                                            <FormattedString>
+                                                                <Span Text="{Binding IskiCode, TargetNullValue=''}" TextColor="{StaticResource ColorWarning}" />
+                                                                <Span Text="  " />
+                                                                <Span Text="{Binding Type}" />
+                                                            </FormattedString>
+                                                        </Label.FormattedText>
+                                                    </Label>
+                                                    <Label Style="{StaticResource Caption}" FontSize="10">
+                                                        <Label.FormattedText>
+                                                            <FormattedString>
+                                                                <Span Text="{Binding DistanceMeters, StringFormat='{0:0.0} m', TargetNullValue='— m'}" />
+                                                                <Span Text="  •  " TextColor="{StaticResource ColorTextTertiary}" />
+                                                                <Span Text="{Binding VideoTimestampMs, Converter={StaticResource MsToTimestamp}}" />
+                                                            </FormattedString>
+                                                        </Label.FormattedText>
+                                                    </Label>
+                                                </VerticalStackLayout>
+                                                <Button Grid.Column="2" Text="🗑"
+                                                        Style="{StaticResource QuietButton}"
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:LiveViewModel}}, Path=DeleteDefectCommand}"
+                                                        CommandParameter="{Binding .}" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </CollectionView.ItemTemplate>
+                            </CollectionView>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- ============== KAMERA + KAYIT ============== -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="KAMERA" Style="{StaticResource SectionTitle}" />
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                                <Button Grid.Column="0" Text="Yayını Başlat"
+                                        Style="{StaticResource SecondaryButton}"
+                                        Command="{Binding StartStreamCommand}" />
+                                <Button Grid.Column="1" Text="Durdur"
+                                        Style="{StaticResource SecondaryButton}"
+                                        Command="{Binding StopStreamCommand}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                <Button Grid.Column="0"
+                                        Text="{Binding IsRecording, Converter={StaticResource BoolToRecordText}}"
+                                        Style="{StaticResource DangerButton}"
+                                        BackgroundColor="{Binding IsRecording, Converter={StaticResource BoolToRecordColor}}"
+                                        Command="{Binding ToggleRecordingCommand}" />
+                                <Button Grid.Column="1" Text="📷"
+                                        Style="{StaticResource SecondaryButton}"
+                                        WidthRequest="48" Padding="0"
+                                        Command="{Binding SnapshotCommand}" />
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- ============== ROBOT BAĞLANTI ============== -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <VerticalStackLayout Spacing="8">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <Label Grid.Column="0" Text="ROBOT" Style="{StaticResource SectionTitle}"
+                                       VerticalOptions="Center" />
+                                <Label Grid.Column="1"
+                                       Text="{Binding IsRobotConnected, Converter={StaticResource BoolToConnectionText}}"
+                                       FontSize="11"
+                                       TextColor="{Binding IsRobotConnected, Converter={StaticResource BoolToConnectionColor}}"
+                                       VerticalOptions="Center" />
+                            </Grid>
+                            <Label Style="{StaticResource Caption}">
+                                <Label.FormattedText>
+                                    <FormattedString>
+                                        <Span Text="Hareket: " />
+                                        <Span Text="{Binding Telemetry.ActiveMove, TargetNullValue='—'}" TextColor="#9cf" />
+                                    </FormattedString>
+                                </Label.FormattedText>
+                            </Label>
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                                <Button Grid.Column="0" Text="Bağlan"
+                                        Style="{StaticResource PrimaryButton}"
+                                        Command="{Binding ConnectRobotCommand}"
+                                        IsEnabled="{Binding IsRobotConnected, Converter={StaticResource InvertedBool}}" />
+                                <Button Grid.Column="1" Text="Kes"
+                                        Style="{StaticResource SecondaryButton}"
+                                        Command="{Binding DisconnectRobotCommand}"
+                                        IsEnabled="{Binding IsRobotConnected}" />
+                            </Grid>
+
+                            <!-- Light with handshake spinner -->
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                <Button Grid.Column="0"
+                                        Text="{Binding IsLightOn, Converter={StaticResource BoolToLightText}}"
+                                        Style="{StaticResource SecondaryButton}"
+                                        Command="{Binding ToggleLightCommand}"
+                                        IsEnabled="{Binding IsLightPending, Converter={StaticResource InvertedBool}}" />
+                                <ActivityIndicator Grid.Column="1"
+                                                   IsRunning="{Binding IsLightPending}"
+                                                   IsVisible="{Binding IsLightPending}"
+                                                   Color="{StaticResource ColorWarning}"
+                                                   VerticalOptions="Center" />
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- ============== JOYSTICK + MANUEL ============== -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <VerticalStackLayout Spacing="8">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <Label Grid.Column="0" Text="GİRDİ" Style="{StaticResource SectionTitle}"
+                                       VerticalOptions="Center" />
+                                <Button Grid.Column="1"
+                                        Text="{Binding IsGamepadActive, Converter={StaticResource BoolToGamepadButtonText}}"
+                                        Style="{StaticResource QuietButton}"
+                                        Command="{Binding ToggleGamepadCommand}" />
+                            </Grid>
+                            <Label Text="{Binding GamepadStatusText}" Style="{StaticResource Caption}" />
+
+                            <!-- Compact dpad fallback (joystick öncelikli) -->
+                            <Label Text="Manuel sürüş (basılı tut)" Style="{StaticResource Caption}" Margin="0,4,0,0" />
+                            <Grid ColumnDefinitions="*,*,*" RowDefinitions="44,44,44"
+                                  ColumnSpacing="4" RowSpacing="4">
+                                <Button Grid.Row="0" Grid.Column="1" Text="▲" FontSize="18"
+                                        Style="{StaticResource SecondaryButton}">
+                                    <Button.GestureRecognizers>
+                                        <PointerGestureRecognizer
+                                            PointerPressedCommand="{Binding PressForwardCommand}"
+                                            PointerReleasedCommand="{Binding ReleaseDpadCommand}"
+                                            PointerExitedCommand="{Binding ReleaseDpadCommand}" />
+                                    </Button.GestureRecognizers>
+                                </Button>
+                                <Button Grid.Row="1" Grid.Column="0" Text="◀" FontSize="18"
+                                        Style="{StaticResource SecondaryButton}">
+                                    <Button.GestureRecognizers>
+                                        <PointerGestureRecognizer
+                                            PointerPressedCommand="{Binding PressLeftCommand}"
+                                            PointerReleasedCommand="{Binding ReleaseDpadCommand}"
+                                            PointerExitedCommand="{Binding ReleaseDpadCommand}" />
+                                    </Button.GestureRecognizers>
+                                </Button>
+                                <Button Grid.Row="1" Grid.Column="1" Text="■" FontSize="18"
+                                        BackgroundColor="{StaticResource ColorDanger}" TextColor="White"
+                                        CornerRadius="8"
+                                        Command="{Binding ReleaseDpadCommand}" />
+                                <Button Grid.Row="1" Grid.Column="2" Text="▶" FontSize="18"
+                                        Style="{StaticResource SecondaryButton}">
+                                    <Button.GestureRecognizers>
+                                        <PointerGestureRecognizer
+                                            PointerPressedCommand="{Binding PressRightCommand}"
+                                            PointerReleasedCommand="{Binding ReleaseDpadCommand}"
+                                            PointerExitedCommand="{Binding ReleaseDpadCommand}" />
+                                    </Button.GestureRecognizers>
+                                </Button>
+                                <Button Grid.Row="2" Grid.Column="1" Text="▼" FontSize="18"
+                                        Style="{StaticResource SecondaryButton}">
+                                    <Button.GestureRecognizers>
+                                        <PointerGestureRecognizer
+                                            PointerPressedCommand="{Binding PressBackwardCommand}"
+                                            PointerReleasedCommand="{Binding ReleaseDpadCommand}"
+                                            PointerExitedCommand="{Binding ReleaseDpadCommand}" />
+                                    </Button.GestureRecognizers>
+                                </Button>
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                </VerticalStackLayout>
+            </ScrollView>
+        </Grid>
+
+        <!-- ============== STATUS BAR (full width) ============== -->
+        <Border Grid.Row="1" Grid.ColumnSpan="2"
+                Background="{StaticResource ColorSurface}"
+                Stroke="{StaticResource ColorBorder}" StrokeThickness="1"
+                StrokeShape="RoundRectangle 6"
+                Padding="12,6" Margin="0,10,0,0">
+            <Label Text="{Binding StatusMessage}" Style="{StaticResource BodyText}" FontSize="12" />
+        </Border>
+
+        <!-- ============== DEFECT ADD MODAL ============== -->
+        <Border Grid.Row="0" Grid.RowSpan="2" Grid.ColumnSpan="2"
+                IsVisible="{Binding IsMarkingDefect}"
+                Background="#dd000000" Padding="24">
+            <ScrollView>
+                <VerticalStackLayout Spacing="12" MaximumWidthRequest="720" HorizontalOptions="Center">
+
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Grid.Column="0" Text="Kusur Ekle" FontSize="22" FontAttributes="Bold" TextColor="White" />
+                        <Button Grid.Column="1" Text="✕" Padding="14,6"
+                                Style="{StaticResource QuietButton}"
+                                Command="{Binding CancelDefectCommand}" />
+                    </Grid>
+
+                    <Image Source="{Binding EditingDefectSnapshotPath}"
+                           HeightRequest="220" Aspect="AspectFit" BackgroundColor="#222" />
+
+                    <!-- İSKİ quick-pick chips -->
+                    <Label Text="İSKİ HIZLI KOD" Style="{StaticResource SectionTitle}" />
+                    <ScrollView Orientation="Horizontal" HorizontalScrollBarVisibility="Never">
+                        <HorizontalStackLayout Spacing="6" BindableLayout.ItemsSource="{Binding IskiCodes}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="m:IskiDefectCode">
+                                    <Border Stroke="{StaticResource ColorBorderStrong}" StrokeThickness="1"
+                                            StrokeShape="RoundRectangle 14"
+                                            Background="{StaticResource ColorSurfaceHigh}"
+                                            Padding="10,5">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:LiveViewModel}}, Path=ApplyIskiCodeCommand}"
+                                                CommandParameter="{Binding .}" />
+                                        </Border.GestureRecognizers>
+                                        <Label FontSize="12" TextColor="White">
+                                            <Label.FormattedText>
+                                                <FormattedString>
+                                                    <Span Text="{Binding Code}" TextColor="{StaticResource ColorWarning}" FontAttributes="Bold" />
+                                                    <Span Text="  " />
+                                                    <Span Text="{Binding Title}" TextColor="{StaticResource ColorTextSecondary}" />
+                                                </FormattedString>
+                                            </Label.FormattedText>
+                                        </Label>
+                                    </Border>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </HorizontalStackLayout>
+                    </ScrollView>
+
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                        <VerticalStackLayout Grid.Column="0">
+                            <Label Text="Mesafe (m)" Style="{StaticResource Caption}" />
+                            <Entry Text="{Binding EditingDefect.DistanceMeters}" Keyboard="Numeric" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="1">
+                            <Label Text="Video Zamanı (ms)" Style="{StaticResource Caption}" />
+                            <Entry Text="{Binding EditingDefect.VideoTimestampMs}" Keyboard="Numeric" IsReadOnly="True" />
+                        </VerticalStackLayout>
+                    </Grid>
+
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                        <VerticalStackLayout Grid.Column="0">
+                            <Label Text="Şiddet" Style="{StaticResource Caption}" />
+                            <Picker ItemsSource="{Binding SeverityOptions}"
+                                    SelectedItem="{Binding EditingDefect.Severity}" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="1">
+                            <Label Text="Tür" Style="{StaticResource Caption}" />
+                            <Picker ItemsSource="{Binding DefectTypes}"
+                                    SelectedItem="{Binding EditingDefect.Type}" />
+                        </VerticalStackLayout>
+                    </Grid>
+
+                    <VerticalStackLayout>
+                        <Label Text="Açıklama" Style="{StaticResource Caption}" />
+                        <Editor Text="{Binding EditingDefect.Description}" HeightRequest="100"
+                                Placeholder="Detay, konum, gözlem..." />
+                    </VerticalStackLayout>
+
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="10" Margin="0,10,0,0">
+                        <Button Grid.Column="0" Text="İptal"
+                                Style="{StaticResource SecondaryButton}"
+                                Command="{Binding CancelDefectCommand}" />
+                        <Button Grid.Column="1" Text="Kaydet"
+                                Style="{StaticResource SuccessButton}"
+                                Command="{Binding SaveDefectCommand}" />
+                    </Grid>
+                </VerticalStackLayout>
+            </ScrollView>
+        </Border>
+
+        <!-- ============== DEFECT PREVIEW OVERLAY ============== -->
+        <Border Grid.Row="0" Grid.RowSpan="2" Grid.ColumnSpan="2"
+                IsVisible="{Binding IsPreviewingDefect}"
+                Background="#dd000000" Padding="24">
+            <VerticalStackLayout Spacing="12" MaximumWidthRequest="720" HorizontalOptions="Center">
+                <Grid ColumnDefinitions="*,Auto">
+                    <Label Grid.Column="0" Text="Kusur Önizleme" FontSize="22" FontAttributes="Bold" TextColor="White" />
+                    <Button Grid.Column="1" Text="✕" Padding="14,6"
+                            Style="{StaticResource QuietButton}"
+                            Command="{Binding ClosePreviewCommand}" />
+                </Grid>
+                <Image Source="{Binding PreviewDefect.PhotoPath}"
+                       HeightRequest="380" Aspect="AspectFit" BackgroundColor="#222" />
+                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">
+                    <VerticalStackLayout Grid.Column="0">
+                        <Label Text="Şiddet" Style="{StaticResource Caption}" />
+                        <Label Text="{Binding PreviewDefect.Severity}" Style="{StaticResource CardTitle}" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Grid.Column="1">
+                        <Label Text="Mesafe" Style="{StaticResource Caption}" />
+                        <Label Text="{Binding PreviewDefect.DistanceMeters, StringFormat='{0:0.0} m', TargetNullValue='—'}"
+                               Style="{StaticResource CardTitle}" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Grid.Column="2">
+                        <Label Text="Video Zamanı" Style="{StaticResource Caption}" />
+                        <Label Text="{Binding PreviewDefect.VideoTimestampMs, Converter={StaticResource MsToTimestamp}}"
+                               Style="{StaticResource CardTitle}" />
+                    </VerticalStackLayout>
+                </Grid>
+                <Label FontSize="15" FontAttributes="Bold">
+                    <Label.FormattedText>
+                        <FormattedString>
+                            <Span Text="{Binding PreviewDefect.IskiCode, TargetNullValue=''}" TextColor="{StaticResource ColorWarning}" />
+                            <Span Text="  " />
+                            <Span Text="{Binding PreviewDefect.Type}" TextColor="{StaticResource ColorHighlight}" />
+                        </FormattedString>
+                    </Label.FormattedText>
+                </Label>
+                <Label Text="{Binding PreviewDefect.Description}" Style="{StaticResource BodyText}" />
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="10" Margin="0,10,0,0">
+                    <Button Grid.Column="0" Text="🗑 Sil"
+                            Style="{StaticResource DangerButton}"
+                            Command="{Binding DeleteDefectCommand}"
+                            CommandParameter="{Binding PreviewDefect}" />
+                    <Button Grid.Column="1" Text="Kapat"
+                            Style="{StaticResource SecondaryButton}"
+                            Command="{Binding ClosePreviewCommand}" />
+                </Grid>
+            </VerticalStackLayout>
+        </Border>
+
+    </Grid>
+</ContentPage>
