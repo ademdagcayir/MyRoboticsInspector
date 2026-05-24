@@ -31,6 +31,22 @@ jobs:
       - name: Install MAUI Windows workload
         run: dotnet workload install maui-windows
 
+      - name: Fix HybridWebView.js missing (MAUI 9.0.120 bug)
+        shell: pwsh
+        run: |
+          $paths = @(
+            "$env:USERPROFILE\.nuget\packages\microsoft.maui.controls.core\9.0.120\lib\net9.0-windows10.0.19041\Microsoft.Maui\Handlers\HybridWebView",
+            "$env:USERPROFILE\.nuget\packages\microsoft.maui.core\9.0.120\lib\net9.0-windows10.0.19041\Microsoft.Maui\Handlers\HybridWebView"
+          )
+          foreach ($dir in $paths) {
+            New-Item -ItemType Directory -Force -Path $dir | Out-Null
+            $file = Join-Path $dir "HybridWebView.js"
+            if (-not (Test-Path $file)) {
+              "" | Out-File -FilePath $file -Encoding utf8
+              Write-Host "Created placeholder: $file"
+            }
+          }
+
       - name: Install Velopack CLI (vpk)
         run: dotnet tool install -g vpk
 
