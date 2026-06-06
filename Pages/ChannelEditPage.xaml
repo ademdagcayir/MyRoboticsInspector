@@ -7,261 +7,324 @@
              Title="{Binding Title}"
              BackgroundColor="{StaticResource ColorPageBg}">
 
-    <Grid RowDefinitions="Auto,*,Auto">
+    <Grid RowDefinitions="Auto,*" RowSpacing="0">
 
-        <!-- ============== STICKY HEADER ============== -->
-        <Border Grid.Row="0" Background="{StaticResource ColorSurface}"
-                Stroke="{StaticResource ColorBorder}" StrokeThickness="0,0,0,1"
-                Padding="16,12">
-            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="10">
+        <!-- ══════════════ HEADER ══════════════ -->
+        <Grid Grid.Row="0" Padding="16,10,16,10"
+              BackgroundColor="{StaticResource ColorSurface}"
+              ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" ColumnSpacing="8">
 
-                <Button Grid.Column="0" Text="‹" FontSize="22"
-                        Style="{StaticResource QuietButton}"
-                        VerticalOptions="Center" Padding="14,4"
-                        Command="{Binding CancelCommand}" />
+            <!-- Geri -->
+            <Button Grid.Column="0" Text="‹" FontSize="20"
+                    Style="{StaticResource QuietButton}"
+                    WidthRequest="36" HeightRequest="36" Padding="0"
+                    Command="{Binding CancelCommand}" />
 
-                <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
-                    <HorizontalStackLayout Spacing="6">
-                        <Label Text="KANAL" Style="{StaticResource SectionTitle}" />
-                        <Border Stroke="{StaticResource ColorAccent}" StrokeThickness="1"
-                                StrokeShape="RoundRectangle 3" Padding="5,1">
-                            <Label Text="EN 13508-2" FontSize="9" FontAttributes="Bold"
-                                   TextColor="{StaticResource ColorAccent}" />
-                        </Border>
-                    </HorizontalStackLayout>
-                    <Label Text="{Binding EditingChannel.ChannelCode, TargetNullValue='(yeni kanal)'}"
-                           FontSize="20" FontAttributes="Bold"
-                           TextColor="{StaticResource ColorTextPrimary}" />
-                    <Label Text="{Binding ParentProject.Title, StringFormat='Proje: {0}'}"
-                           Style="{StaticResource Caption}" LineBreakMode="TailTruncation" />
-                </VerticalStackLayout>
-
-                <Button Grid.Column="2" Text="🗑"
-                        Style="{StaticResource QuietButton}"
-                        VerticalOptions="Center" Padding="10,4"
-                        Command="{Binding DeleteCommand}" />
-                <Button Grid.Column="3" Text="Vazgeç"
-                        Style="{StaticResource SecondaryButton}"
-                        Padding="20,0" Command="{Binding CancelCommand}" />
-                <Button Grid.Column="4" Text="Kaydet"
-                        Style="{StaticResource SuccessButton}"
-                        Padding="24,0" Command="{Binding SaveCommand}" />
-            </Grid>
-        </Border>
-
-        <!-- ============== FORM ============== -->
-        <ScrollView Grid.Row="1" Padding="16">
-            <VerticalStackLayout Spacing="12" MaximumWidthRequest="860" HorizontalOptions="Center">
-
-                <!-- =========== 1. KANAL TANIMI =========== -->
-                <Border Style="{StaticResource CardBorder}">
-                    <VerticalStackLayout Spacing="10">
-                        <Label Text="KANAL TANIMI" Style="{StaticResource SectionTitle}" />
-
-                        <Grid ColumnDefinitions="120,*,*" ColumnSpacing="10">
-                            <VerticalStackLayout Grid.Column="0">
-                                <Label Text="Kanal No" Style="{StaticResource Caption}" />
-                                <Entry Text="{Binding EditingChannel.KanalNo}" Keyboard="Numeric" Placeholder="10" />
-                            </VerticalStackLayout>
-                            <VerticalStackLayout Grid.Column="1">
-                                <Label Text="Kanal Kodu" Style="{StaticResource Caption}" />
-                                <Entry Text="{Binding EditingChannel.ChannelCode}" Placeholder="YK3697A" />
-                            </VerticalStackLayout>
-                            <VerticalStackLayout Grid.Column="2">
-                                <Label Text="Proje Türü" Style="{StaticResource Caption}" />
-                                <Picker ItemsSource="{Binding ProjectTypeOptions}"
-                                        SelectedItem="{Binding SelectedProjectType}"
-                                        ItemDisplayBinding="{Binding Label}" />
-                            </VerticalStackLayout>
-                        </Grid>
-
-                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
-                            <VerticalStackLayout Grid.Column="0">
-                                <Label Text="Tarih + Saat" Style="{StaticResource Caption}" />
-                                <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
-                                    <DatePicker Grid.Column="0" Date="{Binding EditingChannel.StartedAt}"
-                                                Format="dd.MM.yyyy"
-                                                BackgroundColor="{StaticResource ColorSurfaceHigh}"
-                                                TextColor="{StaticResource ColorTextPrimary}" />
-                                    <TimePicker Grid.Column="1" Time="{Binding EditingChannel.StartedAt, Converter={StaticResource DateTimeToTimeSpan}}"
-                                                Format="HH:mm:ss"
-                                                BackgroundColor="{StaticResource ColorSurfaceHigh}"
-                                                TextColor="{StaticResource ColorTextPrimary}" />
-                                </Grid>
-                            </VerticalStackLayout>
-                            <VerticalStackLayout Grid.Column="1">
-                                <Label Text="Proje Metresi (planlanan)" Style="{StaticResource Caption}" />
-                                <Entry Text="{Binding EditingChannel.PlannedMeters}" Keyboard="Numeric" Placeholder="m" />
-                            </VerticalStackLayout>
-                        </Grid>
-                    </VerticalStackLayout>
-                </Border>
-
-                <!-- =========== 2. BACALAR (Giriş / Çıkış) =========== -->
-                <Border Style="{StaticResource CardBorder}">
-                    <VerticalStackLayout Spacing="10">
-                        <Label Text="BACALAR" Style="{StaticResource SectionTitle}" />
-
-                        <!-- Giriş bacası -->
-                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
-                            <VerticalStackLayout Grid.Column="0">
-                                <Label Text="Giriş Bacası Kodu" Style="{StaticResource Caption}" />
-                                <Entry Text="{Binding EditingChannel.EntryManhole}" Placeholder="YK3685A" />
-                            </VerticalStackLayout>
-                            <VerticalStackLayout Grid.Column="1">
-                                <Label Text="Giriş Baca Derinlik (m)" Style="{StaticResource Caption}" />
-                                <Entry Text="{Binding EditingChannel.EntryManholeDepth}" Keyboard="Numeric" Placeholder="örn. 2.40" />
-                            </VerticalStackLayout>
-                        </Grid>
-
-                        <!-- Arrow indicator -->
-                        <Label Text="▼" FontSize="14" HorizontalOptions="Center"
-                               TextColor="{StaticResource ColorTextTertiary}" />
-
-                        <!-- Çıkış bacası -->
-                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
-                            <VerticalStackLayout Grid.Column="0">
-                                <Label Text="Çıkış Bacası Kodu" Style="{StaticResource Caption}" />
-                                <Entry Text="{Binding EditingChannel.ExitManhole}" Placeholder="YK657087A" />
-                            </VerticalStackLayout>
-                            <VerticalStackLayout Grid.Column="1">
-                                <Label Text="Çıkış Baca Derinlik (m)" Style="{StaticResource Caption}" />
-                                <Entry Text="{Binding EditingChannel.ExitManholeDepth}" Keyboard="Numeric" Placeholder="örn. 2.85" />
-                            </VerticalStackLayout>
-                        </Grid>
-                    </VerticalStackLayout>
-                </Border>
-
-                <!-- =========== 3. BORU ÖZELLİKLERİ =========== -->
-                <Border Style="{StaticResource CardBorder}">
-                    <VerticalStackLayout Spacing="10">
-                        <Label Text="BORU ÖZELLİKLERİ" Style="{StaticResource SectionTitle}" />
-
-                        <Grid ColumnDefinitions="2*,*,*" ColumnSpacing="10">
-                            <VerticalStackLayout Grid.Column="0">
-                                <Label Text="Şekil / Kesit" Style="{StaticResource Caption}" />
-                                <Picker ItemsSource="{Binding PipeShapeOptions}"
-                                        SelectedItem="{Binding SelectedPipeShape}"
-                                        ItemDisplayBinding="{Binding Label}" />
-                            </VerticalStackLayout>
-                            <VerticalStackLayout Grid.Column="1">
-                                <Label Text="Genişlik (mm)" Style="{StaticResource Caption}" />
-                                <Entry Text="{Binding EditingChannel.PipeWidthMm}" Keyboard="Numeric" Placeholder="300" />
-                            </VerticalStackLayout>
-                            <VerticalStackLayout Grid.Column="2">
-                                <Label Text="Yükseklik (mm)" Style="{StaticResource Caption}" />
-                                <Entry Text="{Binding EditingChannel.PipeHeightMm}" Keyboard="Numeric" Placeholder="300" />
-                            </VerticalStackLayout>
-                        </Grid>
-
-                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
-                            <VerticalStackLayout Grid.Column="0">
-                                <Label Text="Malzeme" Style="{StaticResource Caption}" />
-                                <Entry Text="{Binding EditingChannel.PipeMaterial}" Placeholder="A — Beton" />
-                            </VerticalStackLayout>
-                            <VerticalStackLayout Grid.Column="1">
-                                <Label Text="Temizlendi mi" Style="{StaticResource Caption}" />
-                                <Picker ItemsSource="{Binding CleanedOptions}"
-                                        SelectedItem="{Binding SelectedCleaned}" />
-                            </VerticalStackLayout>
-                        </Grid>
-
-                        <VerticalStackLayout>
-                            <Label Text="Çap / Kesit Açıklaması (opsiyonel)" Style="{StaticResource Caption}" />
-                            <Entry Text="{Binding EditingChannel.PipeDiameter}" Placeholder="(300) DN300 vb." />
-                        </VerticalStackLayout>
-                    </VerticalStackLayout>
-                </Border>
-
-                <!-- =========== 4. KONUM =========== -->
-                <Border Style="{StaticResource CardBorder}">
-                    <VerticalStackLayout Spacing="10">
-                        <Label Text="KONUM" Style="{StaticResource SectionTitle}" />
-                        <Grid ColumnDefinitions="2*,*" ColumnSpacing="10">
-                            <VerticalStackLayout Grid.Column="0">
-                                <Label Text="Sokak" Style="{StaticResource Caption}" />
-                                <Entry Text="{Binding EditingChannel.Street}" Placeholder="CANAN SK" />
-                            </VerticalStackLayout>
-                            <VerticalStackLayout Grid.Column="1">
-                                <Label Text="Pafta" Style="{StaticResource Caption}" />
-                                <Entry Text="{Binding EditingChannel.Pafta}" Placeholder="30.93" />
-                            </VerticalStackLayout>
-                        </Grid>
-                    </VerticalStackLayout>
-                </Border>
-
-                <!-- =========== 5. GÖRÜNTÜLEME / METRAJ =========== -->
-                <Border Style="{StaticResource CardBorder}">
-                    <VerticalStackLayout Spacing="10">
-                        <Label Text="GÖRÜNTÜLEME" Style="{StaticResource SectionTitle}" />
-
-                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
-                            <VerticalStackLayout Grid.Column="0">
-                                <Label Text="Kontrol Yönü" Style="{StaticResource Caption}" />
-                                <Picker ItemsSource="{Binding FlowOptions}"
-                                        SelectedItem="{Binding SelectedFlow}"
-                                        ItemDisplayBinding="{Binding Label}" />
-                            </VerticalStackLayout>
-                            <VerticalStackLayout Grid.Column="1">
-                                <Label Text="Görüntüleme Başlangıç Yeri" Style="{StaticResource Caption}" />
-                                <Picker ItemsSource="{Binding ViewStartOptions}"
-                                        SelectedItem="{Binding SelectedViewStart}"
-                                        ItemDisplayBinding="{Binding Label}" />
-                            </VerticalStackLayout>
-                        </Grid>
-
-                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
-                            <VerticalStackLayout Grid.Column="0">
-                                <Label Text="GDD (m) — Görüntü Derinliği" Style="{StaticResource Caption}" />
-                                <Entry Text="{Binding EditingChannel.Gdd}" Keyboard="Numeric" Placeholder="1.00" />
-                            </VerticalStackLayout>
-                            <VerticalStackLayout Grid.Column="1">
-                                <Label Text="Gidilen Mesafe (m) — Ölçülen" Style="{StaticResource Caption}" />
-                                <Entry Text="{Binding EditingChannel.DistanceMeters}" Keyboard="Numeric" Placeholder="30.8" />
-                            </VerticalStackLayout>
-                        </Grid>
-                    </VerticalStackLayout>
-                </Border>
-
-                <!-- =========== NOTLAR =========== -->
-                <Border Style="{StaticResource CardBorder}">
-                    <VerticalStackLayout Spacing="6">
-                        <Label Text="NOTLAR" Style="{StaticResource SectionTitle}" />
-                        <Editor Text="{Binding EditingChannel.Notes}" HeightRequest="100"
-                                Placeholder="Kanal hakkında özel notlar, gözlemler, koşullar..." />
-                    </VerticalStackLayout>
-                </Border>
-
-                <Label Text="{Binding StatusMessage}" Style="{StaticResource Caption}" HorizontalOptions="Center" />
-                <BoxView HeightRequest="20" Color="Transparent" />
+            <!-- Başlık -->
+            <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                <Label Text="{Binding EditingChannel.ChannelCode, TargetNullValue='Yeni Kanal'}"
+                       FontSize="17" FontAttributes="Bold"
+                       TextColor="{StaticResource ColorTextPrimary}" />
+                <Label Text="{Binding ParentProject.Title, StringFormat='Proje: {0}'}"
+                       FontSize="11" TextColor="{StaticResource ColorTextTertiary}" />
             </VerticalStackLayout>
-        </ScrollView>
 
-        <!-- ============== STICKY BOTTOM ============== -->
-        <Border Grid.Row="2" Background="{StaticResource ColorSurface}"
-                Stroke="{StaticResource ColorBorder}" StrokeThickness="0,1,0,0"
-                Padding="16,10">
-            <Grid ColumnDefinitions="Auto,*,*,*" ColumnSpacing="10">
-                <Label Grid.Column="0" Style="{StaticResource Caption}"
-                       VerticalOptions="Center" Padding="0,0,12,0">
-                    <Label.FormattedText>
-                        <FormattedString>
-                            <Span Text="Standart " />
-                            <Span Text="EN 13508-2:2003+A1:2011" FontAttributes="Bold"
-                                  TextColor="{StaticResource ColorTextSecondary}" />
-                        </FormattedString>
-                    </Label.FormattedText>
-                </Label>
-                <Button Grid.Column="1" Text="🗑 Sil"
-                        Style="{StaticResource DangerButton}"
-                        Command="{Binding DeleteCommand}" />
-                <Button Grid.Column="2" Text="Vazgeç"
-                        Style="{StaticResource SecondaryButton}"
-                        Command="{Binding CancelCommand}" />
-                <Button Grid.Column="3" Text="✓  Kaydet"
-                        Style="{StaticResource SuccessButton}"
-                        Command="{Binding SaveCommand}" />
-            </Grid>
-        </Border>
+            <!-- Durum mesajı -->
+            <Label Grid.Column="2" Text="{Binding StatusMessage}"
+                   FontSize="12" TextColor="#5ccf8a"
+                   VerticalOptions="Center" MaximumWidthRequest="300"
+                   LineBreakMode="TailTruncation"
+                   IsVisible="{Binding StatusMessage, Converter={StaticResource StringNotEmpty}}" />
+
+            <Button Grid.Column="3" Text="Kapat"
+                    Style="{StaticResource SecondaryButton}"
+                    HeightRequest="34" Padding="14,0"
+                    Command="{Binding CancelCommand}" />
+            <Button Grid.Column="4" Text="Kaydet + Yeni"
+                    Style="{StaticResource SecondaryButton}"
+                    HeightRequest="34" Padding="14,0"
+                    Command="{Binding SaveCommand}"
+                    IsVisible="{Binding IsNew}" />
+            <Button Grid.Column="5" Text="✓  Kaydet"
+                    Style="{StaticResource SuccessButton}"
+                    HeightRequest="34" Padding="18,0"
+                    Command="{Binding SaveAndCloseCommand}" />
+        </Grid>
+
+        <!-- ══════════════ BODY: sol form + sağ liste ══════════════ -->
+        <Grid Grid.Row="1" ColumnDefinitions="*,300" ColumnSpacing="0">
+
+            <!-- ── SOL: Form ── -->
+            <ScrollView Grid.Column="0" Padding="20,16,12,16">
+                <VerticalStackLayout Spacing="10">
+
+                    <!-- 1. KANAL TANIMI -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <VerticalStackLayout Spacing="10">
+                            <Label Text="KANAL TANIMI" Style="{StaticResource SectionTitle}" />
+
+                            <Grid ColumnDefinitions="110,*,*" ColumnSpacing="10">
+                                <VerticalStackLayout Grid.Column="0">
+                                    <Label Text="Kanal No" Style="{StaticResource Caption}" />
+                                    <Entry Text="{Binding EditingChannel.KanalNo}" Keyboard="Numeric" Placeholder="10" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Column="1">
+                                    <Label Text="Kanal Kodu" Style="{StaticResource Caption}" />
+                                    <Entry Text="{Binding EditingChannel.ChannelCode}" Placeholder="YK3697A" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Column="2">
+                                    <Label Text="Proje Türü" Style="{StaticResource Caption}" />
+                                    <Picker ItemsSource="{Binding ProjectTypeOptions}"
+                                            SelectedItem="{Binding SelectedProjectType}"
+                                            ItemDisplayBinding="{Binding Label}" />
+                                </VerticalStackLayout>
+                            </Grid>
+
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                                <VerticalStackLayout Grid.Column="0">
+                                    <Label Text="Tarih + Saat" Style="{StaticResource Caption}" />
+                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                                        <DatePicker Grid.Column="0" Date="{Binding EditingChannel.StartedAt}"
+                                                    Format="dd.MM.yyyy"
+                                                    BackgroundColor="{StaticResource ColorSurfaceHigh}"
+                                                    TextColor="{StaticResource ColorTextPrimary}" />
+                                        <TimePicker Grid.Column="1"
+                                                    Time="{Binding EditingChannel.StartedAt, Converter={StaticResource DateTimeToTimeSpan}}"
+                                                    Format="HH:mm"
+                                                    BackgroundColor="{StaticResource ColorSurfaceHigh}"
+                                                    TextColor="{StaticResource ColorTextPrimary}" />
+                                    </Grid>
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Column="1">
+                                    <Label Text="Planlanan Metre" Style="{StaticResource Caption}" />
+                                    <Entry Text="{Binding EditingChannel.PlannedMeters}" Keyboard="Numeric" Placeholder="m" />
+                                </VerticalStackLayout>
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- 2. BACALAR -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <VerticalStackLayout Spacing="10">
+                            <Label Text="BACALAR" Style="{StaticResource SectionTitle}" />
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                                <VerticalStackLayout Grid.Column="0">
+                                    <Label Text="Giriş Bacası Kodu" Style="{StaticResource Caption}" />
+                                    <Entry Text="{Binding EditingChannel.EntryManhole}" Placeholder="YK3685A" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Column="1">
+                                    <Label Text="Derinlik (m)" Style="{StaticResource Caption}" />
+                                    <Entry Text="{Binding EditingChannel.EntryManholeDepth}" Keyboard="Numeric" Placeholder="2.40" />
+                                </VerticalStackLayout>
+                            </Grid>
+                            <Label Text="▼" FontSize="12" HorizontalOptions="Center"
+                                   TextColor="{StaticResource ColorTextTertiary}" />
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                                <VerticalStackLayout Grid.Column="0">
+                                    <Label Text="Çıkış Bacası Kodu" Style="{StaticResource Caption}" />
+                                    <Entry Text="{Binding EditingChannel.ExitManhole}" Placeholder="YK657087A" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Column="1">
+                                    <Label Text="Derinlik (m)" Style="{StaticResource Caption}" />
+                                    <Entry Text="{Binding EditingChannel.ExitManholeDepth}" Keyboard="Numeric" Placeholder="2.85" />
+                                </VerticalStackLayout>
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- 3. BORU ÖZELLİKLERİ -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <VerticalStackLayout Spacing="10">
+                            <Label Text="BORU ÖZELLİKLERİ" Style="{StaticResource SectionTitle}" />
+                            <Grid ColumnDefinitions="2*,*,*" ColumnSpacing="10">
+                                <VerticalStackLayout Grid.Column="0">
+                                    <Label Text="Şekil / Kesit" Style="{StaticResource Caption}" />
+                                    <Picker ItemsSource="{Binding PipeShapeOptions}"
+                                            SelectedItem="{Binding SelectedPipeShape}"
+                                            ItemDisplayBinding="{Binding Label}" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Column="1">
+                                    <Label Text="Genişlik (mm)" Style="{StaticResource Caption}" />
+                                    <Entry Text="{Binding EditingChannel.PipeWidthMm}" Keyboard="Numeric" Placeholder="300" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Column="2">
+                                    <Label Text="Yükseklik (mm)" Style="{StaticResource Caption}" />
+                                    <Entry Text="{Binding EditingChannel.PipeHeightMm}" Keyboard="Numeric" Placeholder="300" />
+                                </VerticalStackLayout>
+                            </Grid>
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                                <VerticalStackLayout Grid.Column="0">
+                                    <Label Text="Malzeme" Style="{StaticResource Caption}" />
+                                    <Entry Text="{Binding EditingChannel.PipeMaterial}" Placeholder="A — Beton" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Column="1">
+                                    <Label Text="Temizlendi mi" Style="{StaticResource Caption}" />
+                                    <Picker ItemsSource="{Binding CleanedOptions}"
+                                            SelectedItem="{Binding SelectedCleaned}" />
+                                </VerticalStackLayout>
+                            </Grid>
+                            <VerticalStackLayout>
+                                <Label Text="Çap / Kesit Açıklaması" Style="{StaticResource Caption}" />
+                                <Entry Text="{Binding EditingChannel.PipeDiameter}" Placeholder="DN300 vb." />
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- 4. KONUM -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <VerticalStackLayout Spacing="10">
+                            <Label Text="KONUM" Style="{StaticResource SectionTitle}" />
+                            <Grid ColumnDefinitions="2*,*" ColumnSpacing="10">
+                                <VerticalStackLayout Grid.Column="0">
+                                    <Label Text="Sokak" Style="{StaticResource Caption}" />
+                                    <Entry Text="{Binding EditingChannel.Street}" Placeholder="CANAN SK" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Column="1">
+                                    <Label Text="Pafta" Style="{StaticResource Caption}" />
+                                    <Entry Text="{Binding EditingChannel.Pafta}" Placeholder="30.93" />
+                                </VerticalStackLayout>
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- 5. GÖRÜNTÜLEME -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <VerticalStackLayout Spacing="10">
+                            <Label Text="GÖRÜNTÜLEME" Style="{StaticResource SectionTitle}" />
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                                <VerticalStackLayout Grid.Column="0">
+                                    <Label Text="Kontrol Yönü" Style="{StaticResource Caption}" />
+                                    <Picker ItemsSource="{Binding FlowOptions}"
+                                            SelectedItem="{Binding SelectedFlow}"
+                                            ItemDisplayBinding="{Binding Label}" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Column="1">
+                                    <Label Text="Başlangıç Yeri" Style="{StaticResource Caption}" />
+                                    <Picker ItemsSource="{Binding ViewStartOptions}"
+                                            SelectedItem="{Binding SelectedViewStart}"
+                                            ItemDisplayBinding="{Binding Label}" />
+                                </VerticalStackLayout>
+                            </Grid>
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                                <VerticalStackLayout Grid.Column="0">
+                                    <Label Text="GDD (m)" Style="{StaticResource Caption}" />
+                                    <Entry Text="{Binding EditingChannel.Gdd}" Keyboard="Numeric" Placeholder="1.00" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Column="1">
+                                    <Label Text="Gidilen Mesafe (m)" Style="{StaticResource Caption}" />
+                                    <Entry Text="{Binding EditingChannel.DistanceMeters}" Keyboard="Numeric" Placeholder="30.8" />
+                                </VerticalStackLayout>
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- 6. NOTLAR -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <VerticalStackLayout Spacing="6">
+                            <Label Text="NOTLAR" Style="{StaticResource SectionTitle}" />
+                            <Editor Text="{Binding EditingChannel.Notes}" HeightRequest="90"
+                                    Placeholder="Gözlemler, koşullar, özel notlar…" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Sil (düzenleme modunda) -->
+                    <Button Text="Kanalı Sil"
+                            Style="{StaticResource DangerButton}"
+                            HorizontalOptions="Start" Padding="20,0" HeightRequest="36"
+                            Command="{Binding DeleteCommand}"
+                            IsVisible="{Binding IsNew, Converter={StaticResource InvertedBool}}" />
+
+                    <BoxView HeightRequest="16" Color="Transparent" />
+                </VerticalStackLayout>
+            </ScrollView>
+
+            <!-- ── SAĞ: Proje Kanal Listesi ── -->
+            <Border Grid.Column="1"
+                    Background="{StaticResource ColorSurface}"
+                    Stroke="{StaticResource ColorBorder}" StrokeThickness="1,0,0,0"
+                    StrokeShape="Rectangle">
+                <Grid RowDefinitions="Auto,*" RowSpacing="0">
+
+                    <!-- Panel başlık -->
+                    <Border Grid.Row="0"
+                            Background="{StaticResource ColorSurface}"
+                            Stroke="{StaticResource ColorBorder}" StrokeThickness="0,0,0,1"
+                            Padding="16,12">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <VerticalStackLayout Grid.Column="0" Spacing="1">
+                                <Label Text="PROJE KANALLARI" Style="{StaticResource SectionTitle}" />
+                                <Label Text="{Binding SiblingChannels.Count, StringFormat='{0} kanal'}"
+                                       FontSize="11" TextColor="{StaticResource ColorTextTertiary}" />
+                            </VerticalStackLayout>
+                            <!-- Yeni kanal butonu -->
+                            <Button Grid.Column="1" Text="+ Kanal"
+                                    FontSize="11" FontAttributes="Bold"
+                                    BackgroundColor="#1a3d2b" TextColor="#5ccf8a"
+                                    CornerRadius="5" HeightRequest="26" Padding="8,0"
+                                    Command="{Binding SaveCommand}"
+                                    ToolTipProperties.Text="Mevcut kanalı kaydet ve yeni kanal ekle" />
+                        </Grid>
+                    </Border>
+
+                    <!-- Kanal listesi -->
+                    <CollectionView Grid.Row="1"
+                                    ItemsSource="{Binding SiblingChannels}"
+                                    SelectionMode="None">
+                        <CollectionView.EmptyView>
+                            <Label Text="Henüz kanal yok" Style="{StaticResource Caption}"
+                                   HorizontalOptions="Center" Margin="0,24,0,0" />
+                        </CollectionView.EmptyView>
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:SiblingChannel">
+                                <Border Padding="14,10"
+                                        StrokeThickness="0,0,0,1"
+                                        Stroke="{StaticResource ColorBorder}"
+                                        BackgroundColor="{Binding IsCurrent, Converter={StaticResource BoolToHighlightColor}}">
+
+                                        <Grid RowDefinitions="Auto,Auto" RowSpacing="4">
+                                            <!-- Kanal kodu + aksiyonlar -->
+                                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                                                <Label Grid.Column="0"
+                                                       Text="{Binding Label}"
+                                                       FontSize="13" FontAttributes="Bold"
+                                                       TextColor="{StaticResource ColorTextPrimary}"
+                                                       VerticalOptions="Center" />
+                                                <HorizontalStackLayout Grid.Column="1" Spacing="0">
+                                                    <!-- Düzenle -->
+                                                    <Button Text="✎" FontSize="12"
+                                                            Background="Transparent"
+                                                            TextColor="{StaticResource ColorTextSecondary}"
+                                                            HeightRequest="26" WidthRequest="28" Padding="0"
+                                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ChannelEditViewModel}}, Path=EditSiblingCommand}"
+                                                            CommandParameter="{Binding .}" />
+                                                    <!-- Video -->
+                                                    <Button Text="▶" FontSize="11"
+                                                            Background="Transparent"
+                                                            TextColor="{Binding HasVideo, Converter={StaticResource BoolToActiveColor}}"
+                                                            HeightRequest="26" WidthRequest="28" Padding="0"
+                                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ChannelEditViewModel}}, Path=OpenSiblingVideoCommand}"
+                                                            CommandParameter="{Binding .}" />
+                                                    <!-- Rapor -->
+                                                    <Button Text="PDF" FontSize="10"
+                                                            Background="Transparent"
+                                                            TextColor="{StaticResource ColorAccent}"
+                                                            HeightRequest="26" WidthRequest="34" Padding="0"
+                                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ChannelEditViewModel}}, Path=GenerateSiblingReportCommand}"
+                                                            CommandParameter="{Binding .}" />
+                                                </HorizontalStackLayout>
+                                            </Grid>
+                                            <!-- Meta -->
+                                            <Label Grid.Row="1" Text="{Binding Meta}"
+                                                   FontSize="11"
+                                                   TextColor="{StaticResource ColorTextTertiary}" />
+                                        </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </Grid>
+            </Border>
+
+        </Grid>
     </Grid>
 </ContentPage>

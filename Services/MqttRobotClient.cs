@@ -7,6 +7,25 @@ using MyRoboticsInspector.Models;
 
 namespace MyRoboticsInspector.Services;
 
+public enum MqttLogDirection { TX, RX, Info, Error }
+
+public record MqttLogEntry(
+    DateTime Time,
+    MqttLogDirection Direction,
+    string Topic,
+    string Payload)
+{
+    public string Label => Direction switch
+    {
+        MqttLogDirection.TX    => "▲ TX",
+        MqttLogDirection.RX    => "▼ RX",
+        MqttLogDirection.Info  => "● INFO",
+        MqttLogDirection.Error => "✕ ERR",
+        _ => "?"
+    };
+    public string TimeStr => Time.ToString("HH:mm:ss.fff");
+}
+
 /// <summary>
 /// Robot control over MQTT. Implements IRobotProtocol with a broker-based pub/sub model.
 ///
@@ -25,12 +44,19 @@ public class MqttRobotClient : IRobotProtocol
     private string _robotId = "robot1";
     private string _cmdTopic = "myrobotics/robot1/cmd";
 
+    // Reconnect için son bağlantı parametreleri
+    private string? _lastHost;
+    private int _lastPort;
+    private string? _lastUser;
+    private string? _lastPass;
+
     public bool IsConnected => _client.IsConnected;
 
     public event EventHandler<bool>? ConnectionChanged;
     public event EventHandler<byte[]>? DataReceived;
     public event EventHandler<string>? ErrorOccurred;
     public event EventHandler<MqttApplicationMessageReceivedEventArgs>? MessageReceived;
+    public event EventHandler<MqttLogEntry>? TrafficLogged;
 
     public MqttRobotClient()
     {
@@ -40,23 +66,44 @@ public class MqttRobotClient : IRobotProtocol
         _client.ConnectedAsync += _ =>
         {
             ConnectionChanged?.Invoke(this, true);
+            Log(MqttLogDirection.Info, "broker", "Bağlantı kuruldu");
             return Task.CompletedTask;
         };
-        _client.DisconnectedAsync += _ =>
+        _client.DisconnectedAsync += async args =>
         {
             ConnectionChanged?.Invoke(this, false);
-            return Task.CompletedTask;
+            var reason = args.Exception?.Message ?? args.ReasonString ?? "bağlantı kesildi";
+            Log(MqttLogDirection.Info, "broker", $"Bağlantı kesildi — {reason}");
+
+            // Beklenmedik kopuşta otomatik yeniden bağlan (kullanıcı kasıtlı kestiyse _lastHost null olur)
+            if (_lastHost is not null && args.ClientWasConnected)
+            {
+                await Task.Delay(3000); // 3 sn bekle
+                try
+                {
+                    Log(MqttLogDirection.Info, "broker", "Yeniden bağlanılıyor...");
+                    await ConnectAsync(_lastHost, _lastPort, _lastUser, _lastPass);
+                }
+                catch
+                {
+                    Log(MqttLogDirection.Error, "broker", "Yeniden bağlantı başarısız");
+                }
+            }
         };
         _client.ApplicationMessageReceivedAsync += async e =>
         {
             try
             {
+                var topic = e.ApplicationMessage.Topic;
+                var payload = Encoding.UTF8.GetString(e.ApplicationMessage.Payload.ToArray());
+                Log(MqttLogDirection.RX, topic, payload);
                 MessageReceived?.Invoke(this, e);
                 DataReceived?.Invoke(this, e.ApplicationMessage.Payload.ToArray());
             }
             catch (Exception ex)
             {
                 ErrorOccurred?.Invoke(this, $"Mesaj işleme hatası: {ex.Message}");
+                Log(MqttLogDirection.Error, "rx", ex.Message);
             }
             await Task.CompletedTask;
         };
@@ -117,6 +164,7 @@ public class MqttRobotClient : IRobotProtocol
         try
         {
             await _client.ConnectAsync(builder.Build(), ct);
+            _lastHost = host; _lastPort = port; _lastUser = username; _lastPass = password;
         }
         catch (Exception ex)
         {
@@ -127,6 +175,7 @@ public class MqttRobotClient : IRobotProtocol
 
     public async Task DisconnectAsync()
     {
+        _lastHost = null; // kasıtlı kesme — auto-reconnect devreye girmesin
         try
         {
             if (_client.IsConnected) await _client.DisconnectAsync();
@@ -161,16 +210,22 @@ public class MqttRobotClient : IRobotProtocol
             .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
             .Build();
 
+        var payloadStr = Encoding.UTF8.GetString(payload);
         try
         {
             await _client.PublishAsync(msg, ct);
+            Log(MqttLogDirection.TX, _cmdTopic, payloadStr);
         }
         catch (Exception ex)
         {
             ErrorOccurred?.Invoke(this, $"Komut yayınlanamadı: {ex.Message}");
+            Log(MqttLogDirection.Error, _cmdTopic, ex.Message);
             throw;
         }
     }
+
+    private void Log(MqttLogDirection dir, string topic, string payload)
+        => TrafficLogged?.Invoke(this, new MqttLogEntry(DateTime.Now, dir, topic, payload));
 
     public async ValueTask DisposeAsync()
     {

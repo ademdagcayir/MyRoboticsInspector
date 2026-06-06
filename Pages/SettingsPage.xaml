@@ -26,7 +26,7 @@
         </Border>
 
         <ScrollView Grid.Row="1" Padding="16">
-            <VerticalStackLayout Spacing="12" MaximumWidthRequest="820" HorizontalOptions="Center">
+            <VerticalStackLayout Spacing="12" MaximumWidthRequest="720" HorizontalOptions="Start">
 
                 <!-- ============== PROJE / KONUM ============== -->
                 <Border Style="{StaticResource CardBorder}">
@@ -58,17 +58,67 @@
                     <VerticalStackLayout Spacing="10">
                         <Label Text="KAMERA (RTSP)" Style="{StaticResource SectionTitle}" />
                         <VerticalStackLayout>
-                            <Label Text="RTSP URL" Style="{StaticResource Caption}" />
+                            <Label Text="Canlı Önizleme URL (sub-stream /102)" Style="{StaticResource Caption}" />
                             <Entry Text="{Binding Settings.RtspUrl}"
-                                   Placeholder="rtsp://kullanici:sifre@ip:554/Streaming/Channels/101" />
-                            <Label Text="Hikvision: rtsp://USER:PASS@IP:554/Streaming/Channels/101 (ana) — /102 (sub)"
-                                   FontSize="10" TextColor="{StaticResource ColorTextTertiary}" Margin="0,4,0,0" />
+                                   Placeholder="rtsp://admin:sifre@192.168.1.64:554/Streaming/Channels/102" />
+                            <Label Text="Düşük bant — canlı ekranda gösterilir"
+                                   FontSize="10" TextColor="{StaticResource ColorTextTertiary}" Margin="0,2,0,0" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout>
+                            <Label Text="Kayıt URL (ana stream /101)" Style="{StaticResource Caption}" />
+                            <Entry Text="{Binding Settings.RecordingRtspUrl}"
+                                   Placeholder="rtsp://admin:sifre@192.168.1.64:554/Streaming/Channels/101" />
+                            <Label Text="Yüksek kalite — MP4 kaydına yazılır"
+                                   FontSize="10" TextColor="{StaticResource ColorTextTertiary}" Margin="0,2,0,0" />
                         </VerticalStackLayout>
                         <VerticalStackLayout>
                             <Label Text="Ağ Önbellek (ms)" Style="{StaticResource Caption}" />
                             <Entry Text="{Binding Settings.NetworkCachingMs}" Keyboard="Numeric" />
                             <Label Text="Düşük = az gecikme, çok = daha az takılma"
                                    FontSize="10" TextColor="{StaticResource ColorTextTertiary}" Margin="0,4,0,0" />
+                        </VerticalStackLayout>
+
+                        <!-- Önizleme (/102) metre↔kare senkron gecikme telafisi -->
+                        <VerticalStackLayout>
+                            <Grid ColumnDefinitions="*,Auto">
+                                <Label Grid.Column="0" Text="Önizleme Senkron Gecikmesi (/102)" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="1"
+                                       Text="{Binding Settings.MeterSyncOffsetMs, StringFormat='{0} ms'}"
+                                       Style="{StaticResource Caption}"
+                                       TextColor="{StaticResource ColorAccentSoft}" FontAttributes="Bold" />
+                            </Grid>
+                            <Slider Minimum="0" Maximum="1000"
+                                    Value="{Binding Settings.MeterSyncOffsetMs}"
+                                    MinimumTrackColor="{StaticResource ColorAccent}"
+                                    ThumbColor="{StaticResource ColorAccentSoft}" />
+                            <Label Text="Canlı önizlemedeki metre yazısının kareyle hizası (tipik 150–400 ms)."
+                                   FontSize="10" TextColor="{StaticResource ColorTextTertiary}" Margin="0,2,0,0" />
+                        </VerticalStackLayout>
+
+                        <!-- KAYIT (/101 4K) metre↔kare senkron gecikme telafisi -->
+                        <VerticalStackLayout>
+                            <Grid ColumnDefinitions="*,Auto">
+                                <Label Grid.Column="0" Text="Kayıt Senkron Gecikmesi (/101)" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="1"
+                                       Text="{Binding Settings.RecordingMeterSyncOffsetMs, StringFormat='{0} ms'}"
+                                       Style="{StaticResource Caption}"
+                                       TextColor="{StaticResource ColorAccentSoft}" FontAttributes="Bold" />
+                            </Grid>
+                            <Slider Minimum="0" Maximum="2000"
+                                    Value="{Binding Settings.RecordingMeterSyncOffsetMs}"
+                                    MinimumTrackColor="{StaticResource ColorAccent}"
+                                    ThumbColor="{StaticResource ColorAccentSoft}" />
+                            <Label Text="KAYDEDİLEN videoda metre↔kare hizası. Teslim edilen video /101 olduğu için asıl kalibrasyon budur: robotu bilinen bir işaretten geçirip kayıttaki metre o kareye düşene dek ayarlayın."
+                                   FontSize="10" TextColor="{StaticResource ColorTextTertiary}" Margin="0,2,0,0" />
+                        </VerticalStackLayout>
+
+                        <!-- Kayıt encoder -->
+                        <VerticalStackLayout>
+                            <Label Text="Kayıt Encoder" Style="{StaticResource Caption}" />
+                            <Picker ItemsSource="{Binding RecordingEncoders}"
+                                    SelectedItem="{Binding Settings.RecordingEncoder}" />
+                            <Label Text="auto: nvenc→qsv→libx264 otomatik seçer. Donma/atlama olursa libx264 (CPU) en güvenli."
+                                   FontSize="10" TextColor="{StaticResource ColorTextTertiary}" Margin="0,2,0,0" />
                         </VerticalStackLayout>
                     </VerticalStackLayout>
                 </Border>
@@ -199,6 +249,33 @@
                                    Text="Kayıtta overlay'ı göm (proje, mesafe, sensörler)"
                                    Style="{StaticResource BodyText}" VerticalOptions="Center" />
                         </Grid>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- ============== OVERLAY YAZISI (font + boyut) ============== -->
+                <Border Style="{StaticResource CardBorder}">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="GÖRÜNTÜ OVERLAY YAZISI" Style="{StaticResource SectionTitle}" />
+                        <VerticalStackLayout>
+                            <Label Text="Font" Style="{StaticResource Caption}" />
+                            <Picker ItemsSource="{Binding OverlayFonts}"
+                                    SelectedItem="{Binding Settings.OverlayFontFamily}" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout>
+                            <Grid ColumnDefinitions="*,Auto">
+                                <Label Grid.Column="0" Text="Yazı Boyutu" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="1"
+                                       Text="{Binding Settings.OverlayFontScale, StringFormat='{0:0.00}×'}"
+                                       Style="{StaticResource Caption}"
+                                       TextColor="{StaticResource ColorAccentSoft}" FontAttributes="Bold" />
+                            </Grid>
+                            <Slider Minimum="0.5" Maximum="2.5"
+                                    Value="{Binding Settings.OverlayFontScale}"
+                                    MinimumTrackColor="{StaticResource ColorAccent}"
+                                    ThumbColor="{StaticResource ColorAccentSoft}" />
+                            <Label Text="Görüntüye gömülen proje/baca/metre yazılarının fontu ve boyutu. Kaydet'e basınca canlı görüntü ve kayda anında uygulanır."
+                                   FontSize="10" TextColor="{StaticResource ColorTextTertiary}" Margin="0,2,0,0" />
+                        </VerticalStackLayout>
                     </VerticalStackLayout>
                 </Border>
 

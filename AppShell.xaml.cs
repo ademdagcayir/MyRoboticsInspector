@@ -13,4 +13,10 @@ public partial class AppShell : Shell
         Routing.RegisterRoute("projectchannels", typeof(ProjectChannelsPage));
         Routing.RegisterRoute("channeledit", typeof(ChannelEditPage));
     }
+
+    private void OnExitClicked(object sender, EventArgs e)
+    {
+        Application.Current?.Quit();
+    }
+
 }

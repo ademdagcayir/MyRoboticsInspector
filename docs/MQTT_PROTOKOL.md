@@ -1,6 +1,8 @@
 # MyRoboticsInspector ↔ Robot Kartı MQTT Protokolü
 
-**Versiyon:** v1.0 · **Tarih:** 22.05.2026 · **Hedef kitle:** Robot kartı firmware geliştiricileri
+**Versiyon:** v1.1 · **Tarih:** 06.06.2026 · **Hedef kitle:** Robot kartı firmware geliştiricileri
+
+> **v1.1 değişikliği:** Komut modeli "press-and-hold (bir kez gönder)" → **"streaming + watchdog"** olarak güncellendi. Robot firmware'i artık bir hareket-watchdog'u uygulamalı (§3.4). Telemetri, status, LWT şemaları değişmedi.
 
 Bu doküman, kanal görüntüleme robotu ile PC yazılımı (MyRoboticsInspector) arasındaki MQTT haberleşmesinin kontratını tanımlar. Versiyon değişiklikleri **geriye dönük uyumluluğu kırmadan** alan ekleyebilir; mevcut alan adlarını veya semantiğini değiştirmek major versiyon artışı gerektirir.
 
@@ -113,26 +115,56 @@ Tüm komutlar `cmd` adı verilen tek bir topic'e gönderilir; ayrımı **JSON pa
 { "cmd": "CameraPan", "value": -45.0 }
 ```
 
-### 3.4 Komut yaşam döngüsü — press-and-hold
+### 3.4 Komut yaşam döngüsü — streaming + watchdog (v1.1)
 
-PC yazılımı **basılı tutarken sürekli aynı komutu yayınlamaz**; **bir defa** yayınlar ve robot çalışmaya devam eder. Bırakınca **Stop** yayınlanır.
+> **⚠️ v1.0 → v1.1 davranış değişikliği:** Eski "press-and-hold, bir kez gönder" modeli **kaldırıldı**. Artık PC, aktif hareket boyunca komutu **periyodik yeniden yayınlar (streaming)** ve robot firmware'i bir **watchdog** ile komut akışını izler. Bunun nedeni §3.4.1'de.
+
+PC yazılımı, bir hareket komutu (Move/Turn) aktifken **son komutu sabit aralıkla (varsayılan 100 ms) yeniden yayınlar** — joystick sabit tutulsa bile. Hareket **Stop**'a dönünce streaming durur (boştayken trafik yok).
 
 ```
-PC: kullanıcı ▲ tuşuna bastı
-PC → robot: {"cmd":"MoveForward","value":0.5}        ← bir kere
+PC: kullanıcı sol stick'i ileri itti (ve basılı tutuyor)
+PC → robot: {"cmd":"MoveForward","value":0.5}        ← her 100 ms tekrar
+PC → robot: {"cmd":"MoveForward","value":0.5}
+PC → robot: {"cmd":"MoveForward","value":0.5}        ← stick sabit olsa bile akış sürer
 [robot ileri gidiyor...]
-PC: kullanıcı tuşu bıraktı
-PC → robot: {"cmd":"Stop"}                           ← bir kere
-[robot duruyor]
+PC: kullanıcı stick'i bıraktı
+PC → robot: {"cmd":"Stop"}                            ← bir kere, streaming durur
+[robot duruyor — artık komut akmıyor]
 ```
 
-**Robot firmware için kritik:** Komut tekrarı gelmezse de hareket etmeye devam et. PC bağlantısı kopsa ne olur? → **LWT** (bkz. §5).
+#### 3.4.1 Neden streaming? (firmware için kritik gerekçe)
+
+Eski event-based modelde robot, "komut hâlâ geçerli" ile "bağlantı koptu"yu **ayırt edemiyordu**. İki kötü seçenek vardı:
+- **Watchdog yok →** veri/PC koparsa robot son komutla **sonsuza hareket eder** (örn. yürüyüş robotu duvara/insana çarpana dek devam — saha kazası riski).
+- **Watchdog var ama event-based gönderim →** joystick sabit tutulurken yeni mesaj gelmediği için watchdog hareketi **yanlışlıkla keser** (sürüş 0.5 sn sonra tutukluk yapar).
+
+Streaming bu ikilemi çözer: **akış varsa komut canlı, akış durduysa bağlantı koptu.**
+
+#### 3.4.2 Robot firmware watchdog kuralı (ZORUNLU)
+
+Firmware, **son geçerli hareket komutunun (Move/Turn) zaman damgasını** tutmalı ve her döngüde kontrol etmeli:
+
+```c
+// Son komuttan beri 500 ms boyunca yeni komut gelmediyse → güvenli dur.
+// PC 100 ms aralıkla yayınlar; 500 ms = 5 kaçırılmış mesaj toleransı
+// (200 m kablo + ağ jitter için yeterli marj).
+if (millis() - sonHareketKomutu > 500) {
+    motorlariDurdur();   // veya aktif fren — robot dinamiğine göre
+}
+```
+
+- Watchdog **yalnızca hareket komutlarını** (Move/Turn) izler. `LightOn`, `CameraPan` gibi anlık komutlar streaming gerektirmez ve watchdog zaman damgasını **güncellememelidir** (yoksa ışık komutu sürüşü canlı tutar gibi yanlış davranır).
+- `Stop` gelince watchdog'u sıfırla ve motorları durdur.
+- Donanım watchdog'u (`avr/wdt.h`) ile birlikte kullanılması önerilir: yazılım kilitlenirse MCU kendini resetler.
+
+> **Yedek katman — LWT:** Streaming asıl korumadır (~500 ms'de durur). PC çökerse veya broker'dan koparsa **LWT** (§5.3) de robotun `cmd` topic'ine `Stop` yayınlar. İkisi birbirini tamamlar; firmware ikisine de tepki vermeli.
 
 ### 3.5 Komut hızı
 
-- Tipik tempo: kullanıcı etkileşimi başına 1 komut (debouncing yok)
-- Worst case: dpad spam — saniyede ~10 komut. Firmware buna dayanıklı olmalı.
-- Stale komut filtresi (opsiyonel, firmware kararı): `now() - cmd.ts > 500ms` ise reddet (ağ gecikmesi yüksek demektir).
+- **Aktif hareket sırasında:** sabit ~10 komut/sn (100 ms streaming). Stop'ta 0 komut/sn.
+- Anlık komutlar (`LightOn`, `CameraPan` vb.) yalnızca kullanıcı eylemi başına yayınlanır.
+- Firmware ~10 Hz hareket komutu akışına **rahat dayanmalı** (idempotent uygulama, kuyruğa alma yok — §15).
+- Stale komut filtresi (opsiyonel, firmware kararı): `now() - cmd.ts > 500ms` ise reddet (ağ gecikmesi yüksek demektir). Streaming sayesinde bir sonraki tazeleme nasılsa gelir.
 
 ---
 
@@ -309,7 +341,7 @@ PC ve robot için önerilen MQTT client ayarları:
 | Auto-reconnect | true (5 sn backoff) |
 | Client ID | benzersiz; örn. `robot-<mac>-<random6>` |
 
-Keep-Alive 15 sn = LWT en geç ~22 sn'de tetiklenir (1.5x kuralı). Daha hızlı tepki için 5 sn keep-alive da olabilir, ancak şebeke gürültüsü artar.
+Keep-Alive 15 sn = LWT en geç ~22 sn'de tetiklenir (1.5x kuralı). **Sürüş güvenliği artık bu süreye bağlı değildir** — streaming watchdog'u (§3.4) bağlantı kopmasını ~500 ms'de yakalayıp robotu durdurur. LWT yalnızca yedek katmandır; bu yüzden 15 sn keep-alive yeterlidir, daha hızlı tepki için 5 sn de seçilebilir.
 
 ---
 
@@ -361,8 +393,9 @@ Firmware bu spec'e göre yazıldıktan sonra **PC ile entegrasyon testi**:
 6. PC'den komut gönder: `mosquitto_pub -t "myrobotics/robot1/cmd" -m '{"cmd":"MoveForward","value":0.3}'`
 7. Robot ileri gitmeli, `activeMove: "Forward"` döndürmeli
 8. `mosquitto_pub -t "myrobotics/robot1/cmd" -m '{"cmd":"Stop"}'` → robot durmalı
-9. Robot kartını fişten çek → ~22 sn'de PC'de status `offline` görünmeli
-10. PC kapanırsa → broker LWT ile robotun cmd topic'ine Stop yayınlamalı, robot durmalı (bu adım test edilemezse en azından firmware loglarından LWT mesajının alındığı doğrulanmalı)
+9. **Watchdog testi (kritik):** `MoveForward` yayınla ama **tekrarlama**; robot ~500 ms içinde kendiliğinden durmalı (streaming akışı kesildi → watchdog devreye girdi). Ardından 100 ms aralıkla `MoveForward` akışı verirsen robot **kesintisiz** ilerlemeli.
+10. Robot kartını fişten çek → ~22 sn'de PC'de status `offline` görünmeli
+11. PC kapanırsa → (a) streaming akışı durduğu için robot ~500 ms'de watchdog ile durmalı, **ayrıca** (b) broker LWT ile robotun cmd topic'ine Stop yayınlamalı (iki bağımsız katman). Firmware loglarından LWT mesajının alındığı da doğrulanmalı.
 
 ---
 
@@ -370,7 +403,7 @@ Firmware bu spec'e göre yazıldıktan sonra **PC ile entegrasyon testi**:
 
 PC tarafında **Logitech F710** gamepad'i XInput API üzerinden okunuyor. Bu sadece **PC tarafı input katmanı** — protokol açısından hiçbir fark yok: gamepad'ten gelen hareket de aynı `{prefix}/{robotId}/cmd` topic'ine aynı `{cmd,value,ts}` JSON formatında publish edilir.
 
-Firmware için bilinmesi gereken tek davranış farkı: gamepad sürüş yaparken **komut hızı artabilir** (operatör stick'i sürekli sallarsa). Yukarıdaki §3.5'teki "saniyede ~10 komut" varsayımı korunur — PC tarafı 120ms throttle + hysteresis (0.10) ile spam'i frenler, ama yine de fare/parmakla DPad kullanımına kıyasla daha sık komut akar.
+Firmware için bilinmesi gereken davranış: gamepad ile sürüş sırasında PC, son hareket komutunu **100 ms aralıkla yeniden yayınlar** (§3.4 streaming). Yani sol stick ileri itilip sabit tutulduğunda dahi `MoveForward` akışı sürer — bu, robot watchdog'unun hareketi canlı görmesi için **tasarlanmış** davranıştır, spam değildir. Stick merkeze dönünce `Stop` yayınlanır ve akış durur. Anlık komutlar (CameraPan, ışık) yalnızca eylem başına gider, streaming'e dahil değildir.
 
 **Mapping (PC tarafı kararı, robot bilmek zorunda değil):**
 

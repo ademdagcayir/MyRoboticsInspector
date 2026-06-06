@@ -8,31 +8,35 @@
              Title="{Binding Title}"
              BackgroundColor="{StaticResource ColorPageBg}">
 
-    <Grid RowDefinitions="Auto,*,Auto">
+    <Grid RowDefinitions="Auto,*">
 
         <!-- ============== STICKY HEADER ============== -->
         <Border Grid.Row="0" Background="{StaticResource ColorSurface}"
                 Stroke="{StaticResource ColorBorder}" StrokeThickness="0,0,0,1"
                 Padding="16,12">
-            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
                 <VerticalStackLayout Grid.Column="0" Spacing="2" VerticalOptions="Center">
                     <Label Text="PROJE" Style="{StaticResource SectionTitle}" />
                     <Label Text="{Binding PageHeader}" FontSize="20" FontAttributes="Bold"
                            TextColor="{StaticResource ColorTextPrimary}" />
                 </VerticalStackLayout>
 
-                <Button Grid.Column="1" Text="Vazgeç"
+                <Label Grid.Column="1" Text="{Binding StatusMessage}"
+                       TextColor="{StaticResource ColorWarning}"
+                       FontSize="13" VerticalOptions="Center"
+                       IsVisible="{Binding StatusMessage, Converter={StaticResource StringNotEmpty}}" />
+                <Button Grid.Column="2" Text="Vazgeç"
                         Style="{StaticResource SecondaryButton}"
                         Padding="20,0" Command="{Binding CancelCommand}" />
-                <Button Grid.Column="2" Text="Kaydet"
+                <Button Grid.Column="3" Text="✓  Kaydet"
                         Style="{StaticResource SuccessButton}"
                         Padding="24,0" Command="{Binding SaveCommand}" />
             </Grid>
         </Border>
 
         <!-- ============== FORM ============== -->
-        <ScrollView Grid.Row="1" Padding="16">
-            <VerticalStackLayout Spacing="12" MaximumWidthRequest="820" HorizontalOptions="Center">
+        <ScrollView Grid.Row="1" Padding="24,16">
+            <VerticalStackLayout Spacing="12" MaximumWidthRequest="720" HorizontalOptions="Start">
 
                 <!-- Temel Bilgiler -->
                 <Border Style="{StaticResource CardBorder}">
@@ -183,20 +187,6 @@
                 <BoxView HeightRequest="20" Color="Transparent" /> <!-- bottom breathing -->
             </VerticalStackLayout>
         </ScrollView>
-
-        <!-- ============== STICKY BOTTOM ============== -->
-        <Border Grid.Row="2" Background="{StaticResource ColorSurface}"
-                Stroke="{StaticResource ColorBorder}" StrokeThickness="0,1,0,0"
-                Padding="16,10">
-            <Grid ColumnDefinitions="*,*" ColumnSpacing="10" MaximumWidthRequest="500" HorizontalOptions="End">
-                <Button Grid.Column="0" Text="Vazgeç"
-                        Style="{StaticResource SecondaryButton}"
-                        Command="{Binding CancelCommand}" />
-                <Button Grid.Column="1" Text="✓  Kaydet"
-                        Style="{StaticResource SuccessButton}"
-                        Command="{Binding SaveCommand}" />
-            </Grid>
-        </Border>
 
     </Grid>
 </ContentPage>

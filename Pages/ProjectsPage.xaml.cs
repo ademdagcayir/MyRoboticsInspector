@@ -15,6 +15,14 @@ public partial class ProjectsPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await _vm.LoadAsync();
+        try
+        {
+            await _vm.LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"ProjectsPage.OnAppearing error: {ex}");
+            await DisplayAlert("Hata", $"Projeler yüklenirken hata: {ex.Message}", "Tamam");
+        }
     }
 }

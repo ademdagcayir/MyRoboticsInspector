@@ -13,6 +13,7 @@ namespace MyRoboticsInspector.Services;
 public partial class TelemetryService : ObservableObject
 {
     private readonly MqttRobotClient _mqtt;
+    private readonly TelemetrySyncBuffer _sync;
     private string? _subscribedTopic;
 
     [ObservableProperty] private double? distanceMeters;
@@ -28,12 +29,13 @@ public partial class TelemetryService : ObservableObject
     [ObservableProperty] private string? activeMove;
     [ObservableProperty] private DateTime? lastUpdate;
 
-    public TelemetryService(IRobotProtocol robot)
+    public TelemetryService(IRobotProtocol robot, TelemetrySyncBuffer sync)
     {
         // Designed for the MQTT impl. If someone swaps in a non-MQTT IRobotProtocol later,
         // this service is a no-op.
         _mqtt = robot as MqttRobotClient ?? throw new InvalidOperationException(
             "TelemetryService requires an MqttRobotClient implementation of IRobotProtocol.");
+        _sync = sync;
 
         _mqtt.MessageReceived += OnMessage;
     }
@@ -58,6 +60,10 @@ public partial class TelemetryService : ObservableObject
                 PropertyNameCaseInsensitive = true
             });
             if (snap is null) return;
+
+            // Senkron buffer'ı MQTT receive thread'inde, MainThread'e atlamadan ÖNCE besle
+            // (UI dispatch jitter'ı yok → kare↔metre senkronu daha kesin). Buffer thread-safe.
+            if (snap.DistanceMeters.HasValue) _sync.AddMeters(snap.DistanceMeters.Value);
 
             MainThread.BeginInvokeOnMainThread(() =>
             {

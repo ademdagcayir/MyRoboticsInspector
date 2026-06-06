@@ -139,7 +139,49 @@ public class DatabaseService
     public async Task<AppSettings> GetSettingsAsync()
     {
         var db = await GetConnectionAsync();
-        return await db.Table<AppSettings>().FirstAsync();
+        var s = await db.Table<AppSettings>().FirstAsync();
+
+        bool dirty = false;
+
+        // Migrasyon: RecordingRtspUrl boşsa önizleme URL'sinden /101 ana akışını türet ve kaydet.
+        // Kamera eş zamanlı iki bağlantıyı destekliyorsa önizleme /102, kayıt /101 olmalı.
+        if (string.IsNullOrWhiteSpace(s.RecordingRtspUrl) && !string.IsNullOrWhiteSpace(s.RtspUrl))
+        {
+            s.RecordingRtspUrl = DeriveMainStreamUrl(s.RtspUrl);
+            dirty = true;
+        }
+
+        // Migrasyon: yeni eklenen overlay kolonları eski DB satırlarında 0/boş gelir → makul varsayılana çek.
+        if (s.OverlayFontScale <= 0) { s.OverlayFontScale = 1.0; dirty = true; }
+        if (string.IsNullOrWhiteSpace(s.OverlayFontFamily)) { s.OverlayFontFamily = "Arial"; dirty = true; }
+
+        if (dirty) await db.UpdateAsync(s);
+
+        return s;
+    }
+
+    /// <summary>
+    /// Önizleme (sub-stream) URL'sinden kayıt (main-stream) URL'si türetir.
+    /// Hikvision /Channels/102 → /Channels/101.
+    /// Tanınamayan format varsa aynı URL döner (en kötü ihtimalle aynı stream kullanılır).
+    /// </summary>
+    private static string DeriveMainStreamUrl(string subStreamUrl)
+    {
+        // Hikvision: /Streaming/Channels/102 → /Streaming/Channels/101
+        if (subStreamUrl.Contains("/Channels/102", StringComparison.OrdinalIgnoreCase))
+            return subStreamUrl.Replace("/Channels/102", "/Channels/101", StringComparison.OrdinalIgnoreCase);
+        // Hikvision generic /Channels/N02 → /Channels/N01 (multi-camera heads)
+        if (subStreamUrl.Contains("/Channels/", StringComparison.OrdinalIgnoreCase))
+        {
+            var idx = subStreamUrl.LastIndexOf("/Channels/", StringComparison.OrdinalIgnoreCase) + 10;
+            if (idx < subStreamUrl.Length && subStreamUrl[^1] == '2')
+                return subStreamUrl[..^1] + "1";
+        }
+        // Dahua: subtype=1 → subtype=0
+        if (subStreamUrl.Contains("subtype=1", StringComparison.OrdinalIgnoreCase))
+            return subStreamUrl.Replace("subtype=1", "subtype=0", StringComparison.OrdinalIgnoreCase);
+        // Tanınamadı — aynı URL (kötü ama hata vermez)
+        return subStreamUrl;
     }
 
     public async Task<int> SaveSettingsAsync(AppSettings settings)

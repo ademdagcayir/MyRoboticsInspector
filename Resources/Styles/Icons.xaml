@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ResourceDictionary xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+
+    <!--
+    Segoe MDL2 Assets glyph kaynakları. Windows sistem fontu (Win10 1809+ / Win11),
+    kayıt gerektirmez. XAML'de FontFamily="Segoe MDL2 Assets" + Text="{StaticResource ...}".
+    Kaynak kodda XML numeric char-ref (&#xE714;) — görünmez PUA karakteri yok, deterministik.
+    -->
+
+    <!-- Navigasyon -->
+    <x:String x:Key="GlyphVideo">&#xE714;</x:String>
+    <x:String x:Key="GlyphFolder">&#xE8B7;</x:String>
+    <x:String x:Key="GlyphDocument">&#xE8A5;</x:String>
+    <x:String x:Key="GlyphPeople">&#xE716;</x:String>
+    <x:String x:Key="GlyphContact">&#xE77B;</x:String>
+    <x:String x:Key="GlyphSettings">&#xE713;</x:String>
+    <x:String x:Key="GlyphMenu">&#xE700;</x:String>
+
+    <!-- Eylemler -->
+    <x:String x:Key="GlyphAdd">&#xE710;</x:String>
+    <x:String x:Key="GlyphCancel">&#xE711;</x:String>
+    <x:String x:Key="GlyphDelete">&#xE74D;</x:String>
+    <x:String x:Key="GlyphEdit">&#xE70F;</x:String>
+    <x:String x:Key="GlyphSave">&#xE74E;</x:String>
+    <x:String x:Key="GlyphRefresh">&#xE72C;</x:String>
+    <x:String x:Key="GlyphSearch">&#xE721;</x:String>
+    <x:String x:Key="GlyphMore">&#xE712;</x:String>
+    <x:String x:Key="GlyphChevronRight">&#xE76C;</x:String>
+    <x:String x:Key="GlyphBack">&#xE72B;</x:String>
+    <x:String x:Key="GlyphSignOut">&#xF3B1;</x:String>
+
+    <!-- Medya / kamera -->
+    <x:String x:Key="GlyphCamera">&#xE722;</x:String>
+    <x:String x:Key="GlyphPlay">&#xE768;</x:String>
+    <x:String x:Key="GlyphPause">&#xE769;</x:String>
+    <x:String x:Key="GlyphStop">&#xE71A;</x:String>
+    <x:String x:Key="GlyphRecord">&#xE7C8;</x:String>
+    <x:String x:Key="GlyphPhoto">&#xEB9F;</x:String>
+    <x:String x:Key="GlyphFolderOpen">&#xE838;</x:String>
+
+    <!-- Durum / robot -->
+    <x:String x:Key="GlyphLightbulb">&#xEA80;</x:String>
+    <x:String x:Key="GlyphCheck">&#xE73E;</x:String>
+    <x:String x:Key="GlyphWarning">&#xE7BA;</x:String>
+    <x:String x:Key="GlyphLocation">&#xE81D;</x:String>
+    <x:String x:Key="GlyphSpeed">&#xEC4A;</x:String>
+    <x:String x:Key="GlyphBattery">&#xE83F;</x:String>
+    <x:String x:Key="GlyphLink">&#xE71B;</x:String>
+    <x:String x:Key="GlyphRobot">&#xE99A;</x:String>
+    <x:String x:Key="GlyphCloud">&#xE753;</x:String>
+    <x:String x:Key="GlyphUpdate">&#xE777;</x:String>
+
+</ResourceDictionary>

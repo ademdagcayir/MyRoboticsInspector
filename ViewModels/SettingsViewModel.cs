@@ -39,12 +39,25 @@ public partial class SettingsViewModel : BaseViewModel
 
     public bool IsUpdateSupported => _updates.IsSupported;
 
-    public SettingsViewModel(DatabaseService db, BackupService backup, AuthService auth, UpdateService updates)
+    /// <summary>Overlay için seçilebilir sistem fontları (Picker kaynağı).</summary>
+    public string[] OverlayFonts { get; } =
+    {
+        "Arial", "Segoe UI", "Tahoma", "Verdana", "Calibri",
+        "Times New Roman", "Consolas", "Courier New", "Impact"
+    };
+
+    /// <summary>Kayıt encoder seçenekleri (Picker kaynağı).</summary>
+    public string[] RecordingEncoders { get; } = { "auto", "nvenc", "qsv", "libx264" };
+
+    private readonly SyncedVideoPipeline _pipeline;
+
+    public SettingsViewModel(DatabaseService db, BackupService backup, AuthService auth, UpdateService updates, SyncedVideoPipeline pipeline)
     {
         _db = db;
         _backup = backup;
         _auth = auth;
         _updates = updates;
+        _pipeline = pipeline;
         Title = "Ayarlar";
 
         OneDriveAvailable = _backup.OneDriveAvailable;
@@ -123,6 +136,9 @@ public partial class SettingsViewModel : BaseViewModel
     private async Task SaveAsync()
     {
         await _db.SaveSettingsAsync(Settings);
+        // Senkron gecikmesi + overlay font'unu canlı uygula (pipeline singleton — anında etkili)
+        _pipeline.OffsetSeconds = Math.Clamp(Settings.MeterSyncOffsetMs, 0, 3000) / 1000.0;
+        _pipeline.ConfigureOverlayFont(Settings.OverlayFontFamily, Settings.OverlayFontScale);
         RefreshBackupStatus();
         StatusMessage = "Ayarlar kaydedildi";
     }

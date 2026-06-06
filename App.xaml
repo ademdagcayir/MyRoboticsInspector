@@ -9,10 +9,12 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="Resources/Styles/Colors.xaml" />
                 <ResourceDictionary Source="Resources/Styles/Styles.xaml" />
+                <ResourceDictionary Source="Resources/Styles/Icons.xaml" />
                 <ResourceDictionary Source="Resources/Styles/Theme.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
             <conv:InvertedBoolConverter x:Key="InvertedBool" />
+            <conv:NavGlyphConverter x:Key="NavGlyph" />
             <conv:BoolToRecordTextConverter x:Key="BoolToRecordText" />
             <conv:BoolToRecordColorConverter x:Key="BoolToRecordColor" />
             <conv:BoolToLightTextConverter x:Key="BoolToLightText" />
@@ -28,6 +30,10 @@
             <conv:DateTimeToTimeSpanConverter x:Key="DateTimeToTimeSpan" />
             <conv:ProgressNormConverter x:Key="ProgressNorm" />
             <conv:BoolToBackupColorConverter x:Key="BoolToBackupColor" />
+            <conv:BoolToHighlightColorConverter x:Key="BoolToHighlightColor" />
+            <conv:BoolToActiveColorConverter x:Key="BoolToActiveColor" />
+            <conv:StageLabelConverter x:Key="StageLabelConverter" />
+            <conv:PurposeLabelConverter x:Key="PurposeLabelConverter" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

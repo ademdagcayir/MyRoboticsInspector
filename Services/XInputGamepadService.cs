@@ -11,7 +11,7 @@ namespace MyRoboticsInspector.Services;
 /// </summary>
 public class XInputGamepadService : IGamepadInput
 {
-    private const float StickDeadZone = 0.15f;      // sol/sağ stick: |val| < 0.15 = sıfır
+    private const float StickDeadZone = 0.08f;      // sol/sağ stick: |val| < 0.08 = sıfır
     private const float TriggerThreshold = 0.12f;   // LT/RT bu eşiği geçince "basılı" sayılır
 
     private readonly System.Threading.Lock _lock = new();
@@ -24,6 +24,7 @@ public class XInputGamepadService : IGamepadInput
 
     public event EventHandler<bool>? ConnectionChanged;
     public event EventHandler<GamepadState>? StateChanged;
+    public event EventHandler<GamepadState>? RawTick;
     public event EventHandler<GamepadButton>? ButtonPressed;
     public event EventHandler<GamepadButton>? ButtonReleased;
 
@@ -68,9 +69,15 @@ public class XInputGamepadService : IGamepadInput
 
         while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
         {
-            GamepadState curr;
-            try { curr = ReadController(0); }
-            catch { curr = GamepadState.Disconnected; }
+            GamepadState curr, rawCurr;
+            try
+            {
+                (curr, rawCurr) = ReadController(0);
+            }
+            catch
+            {
+                curr = rawCurr = GamepadState.Disconnected;
+            }
 
             if (curr.IsConnected != prev.IsConnected)
             {
@@ -79,14 +86,20 @@ public class XInputGamepadService : IGamepadInput
             }
 
             // Buton press/release edge detection
-            var down = curr.ButtonsDown & ~prev.ButtonsDown; // newly pressed
-            var up   = prev.ButtonsDown & ~curr.ButtonsDown; // newly released
+            var down = curr.ButtonsDown & ~prev.ButtonsDown;
+            var up   = prev.ButtonsDown & ~curr.ButtonsDown;
             EmitButtonEdges(down, ButtonPressed);
             EmitButtonEdges(up,   ButtonReleased);
 
+            // Her tick'te HAM durum — dead zone yok, UI debug için
+            if (rawCurr.IsConnected)
+            {
+                CurrentState = rawCurr; // UI timer CurrentState'i direkt okur
+                RawTick?.Invoke(this, rawCurr);
+            }
+
             if (HasMeaningfulChange(prev, curr))
             {
-                CurrentState = curr;
                 StateChanged?.Invoke(this, curr);
             }
 
@@ -175,12 +188,13 @@ public class XInputGamepadService : IGamepadInput
         catch { return -1; }
     }
 
-    private static GamepadState ReadController(int idx)
+    private static (GamepadState filtered, GamepadState raw) ReadController(int idx)
     {
         var state = new XINPUT_STATE();
         var res = TryXInput(idx, ref state);
         const int ERROR_SUCCESS = 0;
-        if (res != ERROR_SUCCESS) return GamepadState.Disconnected;
+        if (res != ERROR_SUCCESS)
+            return (GamepadState.Disconnected, GamepadState.Disconnected);
 
         var g = state.Gamepad;
 
@@ -210,10 +224,15 @@ public class XInputGamepadService : IGamepadInput
         if (lt > TriggerThreshold) buttons |= GamepadButton.LT;
         if (rt > TriggerThreshold) buttons |= GamepadButton.RT;
 
-        return new GamepadState(true,
+        var filtered = new GamepadState(true,
             ApplyDeadZone(lx), ApplyDeadZone(ly),
             ApplyDeadZone(rx), ApplyDeadZone(ry),
             lt, rt, buttons);
+
+        // Ham — dead zone uygulanmamış, debug görüntüsü için
+        var raw = new GamepadState(true, lx, ly, rx, ry, lt, rt, buttons);
+
+        return (filtered, raw);
     }
 
     private static float Normalize(short v)

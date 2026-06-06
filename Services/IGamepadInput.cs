@@ -20,6 +20,9 @@ public interface IGamepadInput : IDisposable
     /// <summary>Tüm state değişikliği için (axis dahil) tek bildirim.</summary>
     event EventHandler<GamepadState>? StateChanged;
 
+    /// <summary>Her poll tick'te ham state — UI debug göstergesi için, filtrelenmemiş.</summary>
+    event EventHandler<GamepadState>? RawTick;
+
     /// <summary>Tek seferlik buton press tetikleyici (kenar tetikleme: down sırasında).</summary>
     event EventHandler<GamepadButton>? ButtonPressed;
 

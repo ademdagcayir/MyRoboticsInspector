@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:vlc="clr-namespace:LibVLCSharp.MAUI;assembly=LibVLCSharp.MAUI"
              xmlns:vm="clr-namespace:MyRoboticsInspector.ViewModels"
              xmlns:m="clr-namespace:MyRoboticsInspector.Models"
              x:Class="MyRoboticsInspector.Pages.InspectionReviewPage"
@@ -14,14 +13,52 @@
         <!-- ============== VIDEO ============== -->
         <Border Grid.Row="0" Grid.Column="0"
                 Stroke="{StaticResource ColorBorder}" StrokeThickness="1"
-                Background="Black" StrokeShape="RoundRectangle 10">
+                Background="#111318" StrokeShape="RoundRectangle 10">
             <Grid>
-                <vlc:VideoView x:Name="VideoView" MediaPlayer="{Binding MediaPlayer}" />
-                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="8"
-                                     IsVisible="{Binding HasVideo, Converter={StaticResource InvertedBool}}">
-                    <Label Text="🎬" FontSize="40" HorizontalOptions="Center" Opacity="0.5" />
-                    <Label Text="Kayıt bulunamadı"
-                           TextColor="{StaticResource ColorTextTertiary}" HorizontalOptions="Center" />
+                <!-- Kayıt VAR — dosya bilgisi + oynat butonu -->
+                <VerticalStackLayout IsVisible="{Binding HasVideo}"
+                                     VerticalOptions="Center" HorizontalOptions="Center"
+                                     Spacing="16" Padding="32">
+                    <Label Text="🎬" FontSize="56" HorizontalOptions="Center" />
+                    <Label Text="{Binding VideoFileName}"
+                           FontSize="16" FontAttributes="Bold"
+                           TextColor="{StaticResource ColorTextPrimary}"
+                           HorizontalOptions="Center"
+                           LineBreakMode="MiddleTruncation" MaxLines="2" />
+                    <Label Text="{Binding VideoFileSize}"
+                           Style="{StaticResource Caption}"
+                           HorizontalOptions="Center" />
+                    <HorizontalStackLayout Spacing="10" HorizontalOptions="Center">
+                        <Button Text="▶  Oynat"
+                                Style="{StaticResource PrimaryButton}"
+                                Padding="28,10"
+                                FontSize="15"
+                                Command="{Binding OpenVideoCommand}" />
+                        <Button Text="📁 Klasör"
+                                Style="{StaticResource SecondaryButton}"
+                                Padding="16,10"
+                                Command="{Binding OpenFolderCommand}" />
+                    </HorizontalStackLayout>
+                    <Label Text="Sistem varsayılan oynatıcısında açılır (VLC, WMP vb.)"
+                           Style="{StaticResource Caption}"
+                           HorizontalOptions="Center"
+                           Opacity="0.5" />
+                </VerticalStackLayout>
+
+                <!-- Kayıt YOK -->
+                <VerticalStackLayout IsVisible="{Binding HasVideo, Converter={StaticResource InvertedBool}}"
+                                     VerticalOptions="Center" HorizontalOptions="Center"
+                                     Spacing="8">
+                    <Label Text="📂" FontSize="40" HorizontalOptions="Center" Opacity="0.4" />
+                    <Label Text="Kayıt dosyası bulunamadı"
+                           TextColor="{StaticResource ColorTextTertiary}"
+                           HorizontalOptions="Center" FontSize="14" />
+                    <Label Text="{Binding VideoPath}"
+                           Style="{StaticResource Caption}"
+                           HorizontalOptions="Center"
+                           IsVisible="{Binding VideoPath, Converter={StaticResource StringNotEmpty}}"
+                           LineBreakMode="CharacterWrap" MaxLines="2"
+                           Opacity="0.4" />
                 </VerticalStackLayout>
             </Grid>
         </Border>
@@ -82,8 +119,8 @@
             </VerticalStackLayout>
         </Border>
 
-        <!-- ============== SCRUBBER + MARKERS ============== -->
-        <Grid Grid.Row="1" Grid.ColumnSpan="2">
+        <!-- ============== SCRUBBER + MARKERS (sadece kayıt varken göster) ============== -->
+        <Grid Grid.Row="1" Grid.ColumnSpan="2" IsVisible="{Binding HasVideo}">
             <Grid HeightRequest="14" Margin="6,0,6,28">
                 <AbsoluteLayout BindableLayout.ItemsSource="{Binding Markers}">
                     <BindableLayout.ItemTemplate>
@@ -112,28 +149,19 @@
 
         <!-- ============== TRANSPORT ============== -->
         <Border Grid.Row="2" Grid.ColumnSpan="2" Style="{StaticResource CardBorder}" Padding="12">
-            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" ColumnSpacing="8">
-                <Button Grid.Column="0" Text="⏪ 5s"
-                        Style="{StaticResource SecondaryButton}" Padding="16,0"
-                        Command="{Binding SkipBackwardCommand}" />
-                <Button Grid.Column="1" Text="{Binding IsPlaying, Converter={StaticResource BoolToPlayPauseText}}"
-                        Style="{StaticResource PrimaryButton}" Padding="24,0" FontAttributes="Bold"
-                        Command="{Binding TogglePlayPauseCommand}" />
-                <Button Grid.Column="2" Text="5s ⏩"
-                        Style="{StaticResource SecondaryButton}" Padding="16,0"
-                        Command="{Binding SkipForwardCommand}" />
-                <Label Grid.Column="3" VerticalOptions="Center" HorizontalOptions="Center"
-                       TextColor="{StaticResource ColorTextPrimary}" FontSize="16">
-                    <Label.FormattedText>
-                        <FormattedString>
-                            <Span Text="{Binding CurrentTimeDisplay}" FontAttributes="Bold" />
-                            <Span Text="  /  " TextColor="{StaticResource ColorTextTertiary}" />
-                            <Span Text="{Binding TotalTimeDisplay}" TextColor="{StaticResource ColorTextSecondary}" />
-                        </FormattedString>
-                    </Label.FormattedText>
-                </Label>
-                <Label Grid.Column="4" Text="{Binding StatusMessage}"
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <Label Grid.Column="0" Text="{Binding StatusMessage}"
                        Style="{StaticResource Caption}" VerticalOptions="Center" />
+                <HorizontalStackLayout Grid.Column="1" Spacing="8">
+                    <Button Text="▶  Dış Oynatıcıda Aç"
+                            Style="{StaticResource PrimaryButton}" Padding="20,0"
+                            IsVisible="{Binding HasVideo}"
+                            Command="{Binding OpenVideoCommand}" />
+                    <Button Text="📁 Klasörü Aç"
+                            Style="{StaticResource SecondaryButton}" Padding="14,0"
+                            IsVisible="{Binding HasVideo}"
+                            Command="{Binding OpenFolderCommand}" />
+                </HorizontalStackLayout>
             </Grid>
         </Border>
     </Grid>

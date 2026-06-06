@@ -89,6 +89,13 @@ public partial class ProjectsViewModel : BaseViewModel
     }
 
     [RelayCommand]
+    private async Task AddChannelAsync(ProjectListItem? item)
+    {
+        if (item is null) return;
+        await Shell.Current.GoToAsync($"channeledit?jobId={item.Project.Id}");
+    }
+
+    [RelayCommand]
     private async Task DeleteAsync(ProjectListItem? item)
     {
         if (item is null) return;

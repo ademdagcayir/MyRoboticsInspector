@@ -76,32 +76,42 @@ internal static class Program
         Console.WriteLine("Publishing telemetry. Press Ctrl+C to stop.\n");
 
         var startTime = DateTime.Now;
-        var tickIndex = 0L;
+        var tickIndex = 0L;      // her 100 ms'de bir artar
+        var telemetryIndex = 0L; // her 500 ms'lik telemetri yayınını sayar
         try
         {
             while (!cts.IsCancellationRequested)
             {
-                state.Tick(tickIndex, DateTime.Now - startTime);
-                var payload = JsonSerializer.SerializeToUtf8Bytes(state.ToTelemetry(),
-                    new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                // Watchdog'u sık (100 ms) kontrol et — gerçek firmware'in hızlı loop'u gibi.
+                if (state.CheckWatchdog())
+                    Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ⚠ WATCHDOG — komut akışı {500}ms kesildi, robot DURDURULDU");
 
-                if (client.IsConnected)
+                // Telemetriyi 500 ms'de bir yayınla (5 × 100 ms). Tick'in 0.5s hesabı korunur.
+                if (tickIndex % 5 == 0)
                 {
-                    var msg = new MqttApplicationMessageBuilder()
-                        .WithTopic(telemetryTopic)
-                        .WithPayload(payload)
-                        .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtMostOnce)
-                        .Build();
-                    await client.PublishAsync(msg, cts.Token);
+                    state.Tick(telemetryIndex, DateTime.Now - startTime);
+                    var payload = JsonSerializer.SerializeToUtf8Bytes(state.ToTelemetry(),
+                        new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
-                    if (tickIndex % 4 == 0) // throttle console
-                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] TX dist={state.DistanceMeters:0.00}m " +
-                                          $"tilt={state.TiltDegrees:0.0}° batt={state.BatteryPercent:0}% " +
-                                          $"gas={state.GasAlarm} water={state.WaterAlarm}");
+                    if (client.IsConnected)
+                    {
+                        var msg = new MqttApplicationMessageBuilder()
+                            .WithTopic(telemetryTopic)
+                            .WithPayload(payload)
+                            .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtMostOnce)
+                            .Build();
+                        await client.PublishAsync(msg, cts.Token);
+
+                        if (telemetryIndex % 4 == 0) // throttle console
+                            Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] TX dist={state.DistanceMeters:0.00}m " +
+                                              $"tilt={state.TiltDegrees:0.0}° batt={state.BatteryPercent:0}% " +
+                                              $"gas={state.GasAlarm} water={state.WaterAlarm}");
+                    }
+                    telemetryIndex++;
                 }
 
                 tickIndex++;
-                await Task.Delay(500, cts.Token);
+                await Task.Delay(100, cts.Token);
             }
         }
         catch (OperationCanceledException) { }
@@ -169,19 +179,42 @@ internal class SimState
     private float _moveValue = 0.5f;
     private readonly Random _rng = new(42);
 
+    // ===== HAREKET WATCHDOG (gerçek firmware davranışını taklit eder) =====
+    // PC, aktif hareketi 100 ms aralıkla yeniden yayınlar (MQTT_PROTOKOL §3.4).
+    // Son hareket komutundan beri MoveWatchdogMs geçtiyse akış kopmuş demektir →
+    // güvenli dur. Anlık komutlar (LightOn/CameraPan) watchdog'u BESLEMEZ.
+    private DateTime _lastMoveCmdAt = DateTime.MinValue;
+    private const double MoveWatchdogMs = 500;
+
     public void ApplyCommand(string? cmd, float? value)
     {
         if (cmd is null) return;
         switch (cmd)
         {
             case "Stop": _activeMove = "Stop"; Speed = 0; break;
-            case "MoveForward": _activeMove = "Forward"; _moveValue = value ?? 0.5f; break;
-            case "MoveBackward": _activeMove = "Backward"; _moveValue = value ?? 0.5f; break;
-            case "TurnLeft":  _activeMove = "TurnLeft"; _moveValue = value ?? 0.5f; break;
-            case "TurnRight": _activeMove = "TurnRight"; _moveValue = value ?? 0.5f; break;
+            case "MoveForward": _activeMove = "Forward"; _moveValue = value ?? 0.5f; _lastMoveCmdAt = DateTime.UtcNow; break;
+            case "MoveBackward": _activeMove = "Backward"; _moveValue = value ?? 0.5f; _lastMoveCmdAt = DateTime.UtcNow; break;
+            case "TurnLeft":  _activeMove = "TurnLeft"; _moveValue = value ?? 0.5f; _lastMoveCmdAt = DateTime.UtcNow; break;
+            case "TurnRight": _activeMove = "TurnRight"; _moveValue = value ?? 0.5f; _lastMoveCmdAt = DateTime.UtcNow; break;
             case "LightOn":  LightOn = true; break;
             case "LightOff": LightOff(); break;
         }
+    }
+
+    /// <summary>
+    /// Aktif hareket varken komut akışı MoveWatchdogMs boyunca kesildiyse robotu durdurur.
+    /// Yeni durduysa true döner (çağıran tarafın bir kez log yazması için).
+    /// </summary>
+    public bool CheckWatchdog()
+    {
+        if (_activeMove == "Stop") return false;
+        if ((DateTime.UtcNow - _lastMoveCmdAt).TotalMilliseconds > MoveWatchdogMs)
+        {
+            _activeMove = "Stop";
+            Speed = 0;
+            return true;
+        }
+        return false;
     }
 
     private void LightOff() => LightOn = false;
