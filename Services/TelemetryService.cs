@@ -29,6 +29,9 @@ public partial class TelemetryService : ObservableObject
     [ObservableProperty] private string? activeMove;
     [ObservableProperty] private DateTime? lastUpdate;
 
+    /// <summary>Voltaj — ham ADC (0..1023). Firmware 'voltage' topic'i. Kalibrasyon sonra V'ye çevrilir.</summary>
+    [ObservableProperty] private int? voltageRaw;
+
     public TelemetryService(IRobotProtocol robot, TelemetrySyncBuffer sync)
     {
         // Designed for the MQTT impl. If someone swaps in a non-MQTT IRobotProtocol later,
@@ -42,48 +45,41 @@ public partial class TelemetryService : ObservableObject
 
     public async Task SubscribeAsync()
     {
-        var topic = _mqtt.TelemetryTopic;
-        if (_subscribedTopic == topic) return;
-        await _mqtt.SubscribeAsync(topic);
-        _subscribedTopic = topic;
+        if (_subscribedTopic == "firmware") return;
+        // MyRoboticsFirmware bare topic'leri: accl_x, pressure, voltage, metre (düz tamsayı)
+        foreach (var t in FirmwareTopics.TelemetrySubscriptions)
+            await _mqtt.SubscribeAsync(t);
+        _subscribedTopic = "firmware";
     }
 
     private void OnMessage(object? sender, MqttApplicationMessageReceivedEventArgs e)
     {
-        if (e.ApplicationMessage.Topic != _mqtt.TelemetryTopic) return;
-        try
-        {
-            var json = e.ApplicationMessage.Payload.ToArray();
-            if (json.Length == 0) return;
-            var snap = JsonSerializer.Deserialize<TelemetrySnapshot>(json, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            });
-            if (snap is null) return;
+        var topic = e.ApplicationMessage.Topic;
+        var bytes = e.ApplicationMessage.Payload.ToArray();
+        if (bytes.Length == 0) return;
+        var text = System.Text.Encoding.UTF8.GetString(bytes).Trim();
 
-            // Senkron buffer'ı MQTT receive thread'inde, MainThread'e atlamadan ÖNCE besle
-            // (UI dispatch jitter'ı yok → kare↔metre senkronu daha kesin). Buffer thread-safe.
-            if (snap.DistanceMeters.HasValue) _sync.AddMeters(snap.DistanceMeters.Value);
+        // Firmware düz tamsayı yayınlar (atoi). Ham ADC (0..1023) — kalibrasyon sonra birime çevrilir.
+        if (!double.TryParse(text, System.Globalization.NumberStyles.Float,
+                             System.Globalization.CultureInfo.InvariantCulture, out var val))
+            return;
 
-            MainThread.BeginInvokeOnMainThread(() =>
-            {
-                if (snap.DistanceMeters.HasValue) DistanceMeters = snap.DistanceMeters;
-                if (snap.Speed.HasValue) Speed = snap.Speed;
-                if (snap.TiltDegrees.HasValue) TiltDegrees = snap.TiltDegrees;
-                if (snap.PressureBar.HasValue) PressureBar = snap.PressureBar;
-                if (snap.TemperatureC.HasValue) TemperatureC = snap.TemperatureC;
-                if (snap.HumidityPercent.HasValue) HumidityPercent = snap.HumidityPercent;
-                if (snap.BatteryPercent.HasValue) BatteryPercent = snap.BatteryPercent;
-                if (snap.GasAlarm.HasValue) GasAlarm = snap.GasAlarm.Value;
-                if (snap.WaterAlarm.HasValue) WaterAlarm = snap.WaterAlarm.Value;
-                if (snap.LightOn.HasValue) LightOn = snap.LightOn;
-                if (!string.IsNullOrWhiteSpace(snap.ActiveMove)) ActiveMove = snap.ActiveMove;
-                LastUpdate = DateTime.Now;
-            });
-        }
-        catch
+        switch (topic)
         {
-            // Ignore malformed payloads — telemetry is best-effort.
+            case FirmwareTopics.Metre:
+                // Gerçek metre (encoder/200). Video overlay metre senkronunu da besle.
+                _sync.AddMeters(val);
+                MainThread.BeginInvokeOnMainThread(() => { DistanceMeters = val; LastUpdate = DateTime.Now; });
+                break;
+            case FirmwareTopics.AcclX:
+                MainThread.BeginInvokeOnMainThread(() => { TiltDegrees = val; LastUpdate = DateTime.Now; });
+                break;
+            case FirmwareTopics.Pressure:
+                MainThread.BeginInvokeOnMainThread(() => { PressureBar = val; LastUpdate = DateTime.Now; });
+                break;
+            case FirmwareTopics.Voltage:
+                MainThread.BeginInvokeOnMainThread(() => { VoltageRaw = (int)val; LastUpdate = DateTime.Now; });
+                break;
         }
     }
 }

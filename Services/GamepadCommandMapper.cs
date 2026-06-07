@@ -71,52 +71,37 @@ public class GamepadCommandMapper
         }
     }
 
+    // Kamera kafası son gönderilen değerler (tekrar yaymayı önlemek için)
+    private int _lastHead180 = int.MinValue;
+    private int _lastHead360 = int.MinValue;
+
     private void OnStateChanged(object? sender, GamepadState s)
     {
-        // Tetikleyici çarpanları
-        float speedScale = 1.0f;
-        if (s.IsDown(GamepadButton.LT)) speedScale = 0.3f; // yavaş mod
-        else if (s.IsDown(GamepadButton.RT)) speedScale = 1.0f; // tam hız
-        else speedScale = 0.6f; // varsayılan: %60 (operatör için güvenli)
+        // NOT: Firmware sürüşü bang-bang (eşik ≥90/80) — ara hız yok, tetikleyici çarpanı anlamsız.
+        // Streamer baskın ekseni seçip ±100'e çevirir; işaret tersini de o uygular.
 
-        // 1) DPad öncelikli (diskret düşük hız hareket)
-        if (s.IsDown(GamepadButton.DPadUp))    { _drive.SetMove(RobotCommandType.MoveForward,  0.25f); return; }
-        if (s.IsDown(GamepadButton.DPadDown))  { _drive.SetMove(RobotCommandType.MoveBackward, 0.25f); return; }
-        if (s.IsDown(GamepadButton.DPadLeft))  { _drive.SetMove(RobotCommandType.TurnLeft,     0.25f); return; }
-        if (s.IsDown(GamepadButton.DPadRight)) { _drive.SetMove(RobotCommandType.TurnRight,    0.25f); return; }
-
-        // 2) Sol stick — tank stili: hangisi büyükse o eksen
-        float lx = s.LeftStickX;
-        float ly = s.LeftStickY;
-        float ax = Math.Abs(lx), ay = Math.Abs(ly);
-
-        if (ax < 0.05f && ay < 0.05f)
-        {
-            // Stick merkeze döndü → Stop
-            _ = _drive.StopAsync();
-        }
-        else if (ay >= ax)
-        {
-            // Daha çok ileri/geri
-            var type = ly > 0 ? RobotCommandType.MoveForward : RobotCommandType.MoveBackward;
-            var val = Math.Clamp(ay * speedScale, 0f, 1f);
-            _drive.SetMove(type, val);
-        }
+        // 1) DPad öncelikli — diskret tam sürüş (firmware ara hız yapamaz → tam ya da dur)
+        if (s.IsDown(GamepadButton.DPadUp))         _drive.SetMove(RobotCommandType.MoveForward,  1f);
+        else if (s.IsDown(GamepadButton.DPadDown))  _drive.SetMove(RobotCommandType.MoveBackward, 1f);
+        else if (s.IsDown(GamepadButton.DPadLeft))  _drive.SetMove(RobotCommandType.TurnLeft,     1f);
+        else if (s.IsDown(GamepadButton.DPadRight)) _drive.SetMove(RobotCommandType.TurnRight,    1f);
         else
         {
-            // Daha çok sola/sağa dönüş
-            var type = lx > 0 ? RobotCommandType.TurnRight : RobotCommandType.TurnLeft;
-            var val = Math.Clamp(ax * speedScale, 0f, 1f);
-            _drive.SetMove(type, val);
+            // 2) SAĞ stick — sürüş: Y = ileri/geri (yukarı = ileri), X = sağ/sol.
+            //    Streamer |throttle| ≥ 0.5 / baskın eksen kuralıyla ±100'e çevirir.
+            float thr = Math.Abs(s.RightStickY) < 0.06f ? 0f : s.RightStickY;
+            float str = Math.Abs(s.RightStickX) < 0.06f ? 0f : s.RightStickX;
+            _drive.SetDrive(thr, str);
         }
 
-        // 3) Sağ stick — kamera pan/tilt (anlık komut, streaming dışı; sadece anlamlı değişimde yay)
+        // 3) SOL stick — kamera kafası (anlık): Y = 180 tilt, X = 360 dönüş.
+        //    Firmware eşiği |değer| ≥ 35 → ölü bölge 0.35 (altı zaten hareket etmez).
         if (_robot.IsConnected)
         {
-            if (Math.Abs(s.RightStickX) > 0.5f)
-                _ = _robot.SendAsync(new RobotCommand(RobotCommandType.CameraPan, s.RightStickX * 30f));
-            if (Math.Abs(s.RightStickY) > 0.5f)
-                _ = _robot.SendAsync(new RobotCommand(RobotCommandType.CameraTilt, s.RightStickY * 30f));
+            int tilt = Math.Abs(s.LeftStickY) < 0.35f ? 0 : (int)Math.Round(s.LeftStickY * 100f);
+            int rot  = Math.Abs(s.LeftStickX) < 0.35f ? 0 : (int)Math.Round(s.LeftStickX * 100f);
+            if (tilt != _lastHead180) { _ = _robot.PublishRawAsync(FirmwareTopics.Head180UpDown, tilt.ToString()); _lastHead180 = tilt; }
+            if (rot  != _lastHead360) { _ = _robot.PublishRawAsync(FirmwareTopics.Head360CwCcw,  rot.ToString());  _lastHead360 = rot; }
         }
     }
 }

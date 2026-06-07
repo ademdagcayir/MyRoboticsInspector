@@ -22,6 +22,9 @@ public class XInputGamepadService : IGamepadInput
     public bool IsPolling { get; private set; }
     public GamepadState CurrentState { get; private set; } = GamepadState.Disconnected;
 
+    /// <summary>Teşhis: hangi XInput slotları bağlı + seçilen slot (UI'da gösterilir).</summary>
+    public string SlotSummary { get; private set; } = "slot —  ·  0:✗ 1:✗ 2:✗ 3:✗";
+
     public event EventHandler<bool>? ConnectionChanged;
     public event EventHandler<GamepadState>? StateChanged;
     public event EventHandler<GamepadState>? RawTick;
@@ -72,7 +75,7 @@ public class XInputGamepadService : IGamepadInput
             GamepadState curr, rawCurr;
             try
             {
-                (curr, rawCurr) = ReadController(0);
+                (curr, rawCurr) = ReadAnyController();
             }
             catch
             {
@@ -91,12 +94,11 @@ public class XInputGamepadService : IGamepadInput
             EmitButtonEdges(down, ButtonPressed);
             EmitButtonEdges(up,   ButtonReleased);
 
-            // Her tick'te HAM durum — dead zone yok, UI debug için
+            // Her tick'te HAM durum — dead zone yok, UI debug için.
+            // Bağlantı kopunca da güncelle (aksi hâlde eski/stale değer ekranda kalır).
+            CurrentState = rawCurr; // UI timer CurrentState'i direkt okur
             if (rawCurr.IsConnected)
-            {
-                CurrentState = rawCurr; // UI timer CurrentState'i direkt okur
                 RawTick?.Invoke(this, rawCurr);
-            }
 
             if (HasMeaningfulChange(prev, curr))
             {
@@ -187,6 +189,67 @@ public class XInputGamepadService : IGamepadInput
         }
         catch { return -1; }
     }
+
+    /// <summary>
+    /// 4 XInput slotunu (0..3) tarar. Girdi (stick/tetik/buton) OLAN ilk bağlı kumandayı döndürür;
+    /// hiçbiri hareket etmiyorsa en düşük indeksli bağlı kumandayı döndürür. Böylece F710 slot 0
+    /// dışında olsa ya da slot 0'da hayalet bir XInput cihazı varsa, hareket eden gerçek kumanda seçilir.
+    /// </summary>
+    // Hayalet/birden çok XInput slotu olduğunda, GERÇEK kumandayı (girdi üreten) kilitleriz.
+    private int _activeSlot = -1;
+
+    private (GamepadState filtered, GamepadState raw) ReadAnyController()
+    {
+        var filtered = new GamepadState[4];
+        var raw      = new GamepadState[4];
+        var conn     = new bool[4];
+        int firstConn = -1, moving = -1;
+
+        for (int idx = 0; idx < 4; idx++)
+        {
+            var (f, r) = ReadController(idx);
+            filtered[idx] = f; raw[idx] = r; conn[idx] = r.IsConnected;
+            if (!r.IsConnected) continue;
+            if (firstConn < 0) firstConn = idx;
+
+            bool hasInput =
+                   Math.Abs(r.LeftStickX)  > 0.12f || Math.Abs(r.LeftStickY)  > 0.12f
+                || Math.Abs(r.RightStickX) > 0.12f || Math.Abs(r.RightStickY) > 0.12f
+                || r.LeftTrigger > 0.12f || r.RightTrigger > 0.12f
+                || r.ButtonsDown != GamepadButton.None;
+            if (hasInput && moving < 0) moving = idx;
+        }
+
+        // Slot seçimi:
+        //  1) Bir slot girdi üretiyorsa onu seç ve KİLİTLE (gerçek kumanda bu).
+        //  2) Girdi yoksa, kilitli slot hâlâ bağlıysa onu kullan (stabil — hayalet slot 0'a dönme).
+        //  3) Hiç kilit yoksa ilk bağlı slotu kullan.
+        int chosen;
+        if (moving >= 0)
+        {
+            // Girdi üreten gerçek kumanda → seç ve kilitle
+            chosen = moving; _activeSlot = moving;
+        }
+        else if (_activeSlot >= 0 && _activeSlot < 4 && conn[_activeSlot])
+        {
+            // Kilitli slot hâlâ bağlı → onu kullan (stabil)
+            chosen = _activeSlot;
+        }
+        else
+        {
+            // Kilitli slot anlık koptu: hayalet slota KALICI geçme — kilidi koru,
+            // sadece geçici olarak ilk bağlı slotu göster. Kumanda dönünce yine kilitli slot seçilir.
+            chosen = firstConn;
+            if (_activeSlot < 0) _activeSlot = firstConn; // yalnızca ilk edinmede kilitle
+        }
+
+        SlotSummary = $"slot {(chosen < 0 ? "—" : chosen.ToString())}  ·  0:{Mark(conn[0])} 1:{Mark(conn[1])} 2:{Mark(conn[2])} 3:{Mark(conn[3])}";
+
+        if (chosen < 0) return (GamepadState.Disconnected, GamepadState.Disconnected);
+        return (filtered[chosen], raw[chosen]);
+    }
+
+    private static string Mark(bool b) => b ? "✓" : "✗";
 
     private static (GamepadState filtered, GamepadState raw) ReadController(int idx)
     {

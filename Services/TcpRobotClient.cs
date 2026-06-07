@@ -69,6 +69,9 @@ public class TcpRobotClient : IRobotProtocol
         }
     }
 
+    /// <summary>TCP taşımasında MQTT bare-topic kavramı yok — no-op (firmware MQTT kullanır).</summary>
+    public Task PublishRawAsync(string topic, string payload, CancellationToken ct = default) => Task.CompletedTask;
+
     public async Task SendAsync(RobotCommand command, CancellationToken ct = default)
     {
         if (_stream is null) throw new InvalidOperationException("Robot bağlı değil.");

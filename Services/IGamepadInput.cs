@@ -15,6 +15,9 @@ public interface IGamepadInput : IDisposable
 
     GamepadState CurrentState { get; }
 
+    /// <summary>Teşhis: XInput slot bağlantı özeti (UI'da gösterilir). Varsayılan boş.</summary>
+    string SlotSummary => "";
+
     event EventHandler<bool>? ConnectionChanged;
 
     /// <summary>Tüm state değişikliği için (axis dahil) tek bildirim.</summary>

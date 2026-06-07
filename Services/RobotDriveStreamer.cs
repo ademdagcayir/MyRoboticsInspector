@@ -3,33 +3,46 @@ using MyRoboticsInspector.Models;
 namespace MyRoboticsInspector.Services;
 
 /// <summary>
-/// Tüm sürüş girdilerinin (gamepad, klavye, ekran dpad butonları) ortak çıkış katmanı.
+/// Tüm sürüş girdilerinin (gamepad, klavye, ekran dpad, test tezgahı) ortak çıkış katmanı.
 ///
-/// <para><b>Neden var?</b> Robot firmware'i bir watchdog ile komut akışını izler: son hareket
-/// komutundan beri ~500 ms boyunca yeni mesaj gelmezse "bağlantı koptu" sayıp motorları durdurur
-/// (bkz. docs/MQTT_PROTOKOL.md §3.4). Event-based gönderimde joystick/tuş sabit tutulurken yeni
-/// mesaj üretilmez ve watchdog yürüyüşü yanlışlıkla keser. Bu sınıf, aktif bir hareket (Move/Turn)
-/// sürerken son komutu sabit aralıkla (varsayılan 100 ms) yeniden yayınlayarak akışı "canlı" tutar.
-/// Veri/PC koparsa akış durur → robot ~500 ms içinde güvenle durur.</para>
+/// <para><b>MyRoboticsFirmware gerçek protokolü (robot/yuruyus_ileri_geri.ino):</b>
+/// Sürüş <b>bang-bang</b>'tir, oransal değil. Robot motoru ancak şu eşiklerde döner:</para>
+/// <list type="bullet">
+///   <item><c>forward_backward ≤ -90</c> → İLERİ  (negatif = ileri!)</item>
+///   <item><c>forward_backward ≥ +90</c> → GERİ   (pozitif = geri!)</item>
+///   <item><c>left_right ≤ -80</c> ve <c>forward_backward == 0</c> → SAĞ dönüş</item>
+///   <item><c>left_right ≥ +80</c> ve <c>forward_backward == 0</c> → SOL dönüş</item>
+/// </list>
+/// <para>Yürüyüş ve dönüş <b>aynı anda olmaz</b> (dönüş için fb=0 şart). Bu yüzden burada
+/// baskın eksen seçilir: |throttle| ≥ |steer| ise yürü, değilse dön. Ara değerler robotu
+/// hareket ettirmediği için ±100 (tam) yayınlanır.</para>
 ///
-/// <para><b>Kullanım:</b> Girdi kaynakları yalnızca <see cref="SetMove"/> / <see cref="StopAsync"/>
-/// çağırır; periyodik yayını bu sınıf üstlenir. Stop durumunda hiçbir şey yayınlanmaz (boşta trafik yok).
-/// Anlık komutlar (ışık, kamera pan/tilt) streaming gerektirmez — onlar doğrudan IRobotProtocol
-/// üzerinden gönderilmeli, bu sınıftan geçmemeli.</para>
+/// <para><b>İç eksen sözleşmesi (sezgisel):</b> throttle&gt;0 = ileri, steer&gt;0 = sağ.
+/// Firmware'e çevirirken işaret ters çevrilir (ileri→fb negatif, sağ→lr negatif).</para>
+///
+/// <para><b>Watchdog:</b> Robot ~500 ms sürüş komutu gelmezse motorları durdurur. Bu sınıf
+/// aktif sürüşte son değeri 100 ms'de bir yeniden yayınlayarak akışı canlı tutar; sürüş
+/// bırakılınca bir kez 0 yayınlar (anında durur), sonra sessizleşir.</para>
 /// </summary>
 public sealed class RobotDriveStreamer : IAsyncDisposable
 {
     private readonly IRobotProtocol _robot;
     private static readonly TimeSpan StreamInterval = TimeSpan.FromMilliseconds(100);
 
+    // Bang-bang eşikleri için stick eşiği (yarıdan fazla itince hareket)
+    private const float ActivateThreshold = 0.5f;
+
     private readonly object _lock = new();
-    private RobotCommandType _moveType = RobotCommandType.Stop;
-    private float _moveValue;
+    private float _throttle;  // -1..+1  (ileri +, geri -)  → forward_backward'a TERS çevrilir
+    private float _steer;     // -1..+1  (sağ +, sol -)     → left_right'a TERS çevrilir
+    private bool _wasMoving;
 
     private readonly CancellationTokenSource _cts = new();
-
-    /// <summary>Yayın hatası olduğunda (örn. geçici kopma) bilgi verir. UI loglayabilir.</summary>
     public event EventHandler<string>? StreamError;
+
+    /// <summary>UI/teşhis için en son firmware'e yayınlanan ham değerler.</summary>
+    public int LastForwardBackward { get; private set; }
+    public int LastLeftRight { get; private set; }
 
     public RobotDriveStreamer(IRobotProtocol robot)
     {
@@ -37,35 +50,54 @@ public sealed class RobotDriveStreamer : IAsyncDisposable
         _ = StreamLoop(_cts.Token);
     }
 
-    /// <summary>
-    /// Aktif hareketi günceller. Yalnızca yerel durumu set eder (ucuz, ağ I/O yok); gerçek yayını
-    /// streaming döngüsü 100 ms'de bir yapar. İstediğin sıklıkta güvenle çağırabilirsin.
-    /// </summary>
-    public void SetMove(RobotCommandType type, float value)
+    /// <summary>Oransal girdi (gamepad sağ stick): throttle = Y (ileri+), steer = X (sağ+). -1..+1.</summary>
+    public void SetDrive(float throttle, float steer)
     {
         lock (_lock)
         {
-            _moveType = type;
-            _moveValue = value;
+            _throttle = Math.Clamp(throttle, -1f, 1f);
+            _steer    = Math.Clamp(steer,    -1f, 1f);
         }
     }
 
-    /// <summary>
-    /// Sürüşü durdurur: streaming akışını keser ve anında bir <c>Stop</c> komutu yayınlar
-    /// (watchdog'u beklemeden robotun hemen durması için).
-    /// </summary>
-    public async Task StopAsync()
+    /// <summary>Diskret sürüş (ekran dpad / klavye / test). Firmware bang-bang olduğu için tam (±1) uygulanır.</summary>
+    public void SetMove(RobotCommandType type, float value)
     {
+        float mag = Math.Abs(value) < 0.01f ? 0f : 1f; // firmware ara hız yapamaz → tam ya da dur
         lock (_lock)
         {
-            _moveType = RobotCommandType.Stop;
-            _moveValue = 0f;
+            switch (type)
+            {
+                case RobotCommandType.MoveForward:  _throttle = +mag; _steer = 0; break;
+                case RobotCommandType.MoveBackward: _throttle = -mag; _steer = 0; break;
+                case RobotCommandType.TurnRight:    _steer = +mag; _throttle = 0; break;
+                case RobotCommandType.TurnLeft:     _steer = -mag; _throttle = 0; break;
+                default:                            _throttle = 0; _steer = 0; break;
+            }
         }
+    }
 
+    /// <summary>İç eksen (throttle/steer) → firmware (fb/lr). Baskın eksen seçilir; işaret ters çevrilir.</summary>
+    private static (int fb, int lr) ToFirmware(float throttle, float steer)
+    {
+        if (Math.Abs(throttle) >= Math.Abs(steer) && Math.Abs(throttle) >= ActivateThreshold)
+            return (throttle > 0 ? -100 : 100, 0);          // ileri → fb negatif
+        if (Math.Abs(steer) >= ActivateThreshold)
+            return (0, steer > 0 ? -100 : 100);             // sağ → lr negatif, fb=0 (dönüş şartı)
+        return (0, 0);
+    }
+
+    /// <summary>Sürüşü durdurur: durumu sıfırlar, anında forward_backward=0, left_right=0, brake=1 yayınlar.</summary>
+    public async Task StopAsync()
+    {
+        lock (_lock) { _throttle = 0; _steer = 0; _wasMoving = false; }
+        LastForwardBackward = 0; LastLeftRight = 0;
         if (!_robot.IsConnected) return;
         try
         {
-            await _robot.SendAsync(new RobotCommand(RobotCommandType.Stop));
+            await _robot.PublishRawAsync(FirmwareTopics.ForwardBackward, "0");
+            await _robot.PublishRawAsync(FirmwareTopics.LeftRight, "0");
+            await _robot.PublishRawAsync(FirmwareTopics.Brake, "1");
         }
         catch (Exception ex)
         {
@@ -80,41 +112,52 @@ public sealed class RobotDriveStreamer : IAsyncDisposable
         {
             while (await timer.WaitForNextTickAsync(ct))
             {
-                RobotCommandType type;
-                float value;
-                lock (_lock)
+                float thr, str;
+                lock (_lock) { thr = _throttle; str = _steer; }
+
+                var (fb, lr) = ToFirmware(thr, str);
+                bool moving = fb != 0 || lr != 0;
+
+                if (!_robot.IsConnected) { _wasMoving = false; continue; }
+
+                if (!moving)
                 {
-                    type = _moveType;
-                    value = _moveValue;
+                    // Sürüş bırakıldı: bir kez 0 yay (anında dur), sonra sessiz (watchdog güvende).
+                    if (_wasMoving)
+                    {
+                        _wasMoving = false;
+                        LastForwardBackward = 0; LastLeftRight = 0;
+                        try
+                        {
+                            await _robot.PublishRawAsync(FirmwareTopics.ForwardBackward, "0");
+                            await _robot.PublishRawAsync(FirmwareTopics.LeftRight, "0");
+                        }
+                        catch { /* sonraki bırakışta yine denenir */ }
+                    }
+                    continue;
                 }
 
-                if (type == RobotCommandType.Stop) continue; // boşta sessiz
-                if (!_robot.IsConnected) continue;
-
+                _wasMoving = true;
+                LastForwardBackward = fb; LastLeftRight = lr;
                 try
                 {
-                    await _robot.SendAsync(new RobotCommand(type, value));
+                    await _robot.PublishRawAsync(FirmwareTopics.ForwardBackward, fb.ToString());
+                    await _robot.PublishRawAsync(FirmwareTopics.LeftRight, lr.ToString());
                 }
                 catch
                 {
-                    // Geçici yayın hatası — bir sonraki tick'te yeniden denenir (akış sürekli)
+                    // Geçici yayın hatası — sonraki tick yeniden dener (akış sürekli)
                 }
             }
         }
-        catch (OperationCanceledException)
-        {
-            // Dispose ile normal durdurma
-        }
-        finally
-        {
-            timer.Dispose();
-        }
+        catch (OperationCanceledException) { }
+        finally { timer.Dispose(); }
     }
 
     public async ValueTask DisposeAsync()
     {
         _cts.Cancel();
-        try { await StopAsync(); } catch { /* kapanışta yoksay */ }
+        try { await StopAsync(); } catch { }
         _cts.Dispose();
     }
 }

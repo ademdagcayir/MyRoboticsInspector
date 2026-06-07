@@ -29,6 +29,306 @@
                     <Shadow Brush="#000000" Offset="0,10" Radius="28" Opacity="0.55" />
                 </Border.Shadow>
                 <Grid>
+                  <!-- ===== ÇEVRE BİRİMLERİ (büyük, varsayılan görünüm) ===== -->
+                  <ScrollView IsVisible="{Binding IsBigStatus}" Padding="24">
+                    <VerticalStackLayout Spacing="12">
+                        <Label Text="Çevre Birimleri Durumu" TextColor="White"
+                               FontSize="20" FontAttributes="Bold" HorizontalOptions="Center" />
+                        <Label Text="Kalkış öncesi kontrol — cihazların anlık durumu ve verileri" TextColor="#8A8F9C"
+                               FontSize="12" HorizontalOptions="Center" Margin="0,0,0,2" />
+
+                        <!-- ===== SİSTEM HAZIR bandı ===== -->
+                        <Border BackgroundColor="#14171F" StrokeThickness="2" StrokeShape="RoundRectangle 12" Padding="16,12"
+                                Stroke="#262A35">
+                            <Label Text="{Binding SystemReadyText}" HorizontalOptions="Center"
+                                   FontSize="16" FontAttributes="Bold"
+                                   TextColor="{Binding SystemReady, Converter={StaticResource BoolToConnectionColor}}" />
+                        </Border>
+
+                        <!-- İki sütun: SOL = bağlı (zengin), SAĞ = bağlı değil (kompakt) -->
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
+                          <!-- ░░░ SOL: BAĞLI ░░░ -->
+                          <VerticalStackLayout Grid.Column="0" Spacing="12">
+                            <Label Text="✓ BAĞLI" TextColor="#5BCB7A" FontSize="13" FontAttributes="Bold" />
+
+                            <!-- ===== KAMERA ===== -->
+                            <Border BackgroundColor="#14171F" StrokeThickness="1" Stroke="#262A35"
+                                StrokeShape="RoundRectangle 12" Padding="18,14"
+                                IsVisible="{Binding IsCameraOnline}">
+                            <VerticalStackLayout Spacing="10">
+                                <Grid ColumnDefinitions="20,*,Auto" ColumnSpacing="14">
+                                    <Border Grid.Column="0" WidthRequest="18" HeightRequest="18" StrokeThickness="0"
+                                            StrokeShape="RoundRectangle 9" VerticalOptions="Center"
+                                            BackgroundColor="{Binding IsCameraOnline, Converter={StaticResource BoolToConnectionColor}}" />
+                                    <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                                        <Label Text="Kamera (RTSP)" TextColor="White" FontSize="16" FontAttributes="Bold" />
+                                        <Label Text="Canlı görüntü yayını" FontSize="12" TextColor="#8A8F9C" />
+                                    </VerticalStackLayout>
+                                    <Label Grid.Column="2" VerticalOptions="Center" FontSize="14" FontAttributes="Bold"
+                                           Text="{Binding IsCameraOnline, Converter={StaticResource BoolToConnectionText}}"
+                                           TextColor="{Binding IsCameraOnline, Converter={StaticResource BoolToConnectionColor}}"
+                                           IsVisible="{Binding IsCameraOnline}" />
+                                    <Button Grid.Column="2" Text="Bağlan" Style="{StaticResource SecondaryButton}"
+                                            FontSize="13" Padding="16,6" Command="{Binding StartStreamCommand}"
+                                            IsVisible="{Binding IsCameraOnline, Converter={StaticResource InvertedBool}}" />
+                                </Grid>
+                                <BoxView HeightRequest="1" Color="#262A35" />
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                    <Label Grid.Column="0" Text="Durum" FontSize="11" TextColor="#8A8F9C" />
+                                    <Label Grid.Column="1" FontSize="12" TextColor="White"
+                                           Text="{Binding IsStreaming, Converter={StaticResource BoolToConnectionText}}" />
+                                </Grid>
+                            </VerticalStackLayout>
+                        </Border>
+
+                            <!-- ===== BROKER ===== -->
+                            <Border BackgroundColor="#14171F" StrokeThickness="1" Stroke="#262A35"
+                                StrokeShape="RoundRectangle 12" Padding="18,14"
+                                IsVisible="{Binding IsRobotConnected}">
+                            <VerticalStackLayout Spacing="10">
+                                <Grid ColumnDefinitions="20,*,Auto" ColumnSpacing="14">
+                                    <Border Grid.Column="0" WidthRequest="18" HeightRequest="18" StrokeThickness="0"
+                                            StrokeShape="RoundRectangle 9" VerticalOptions="Center"
+                                            BackgroundColor="{Binding IsRobotConnected, Converter={StaticResource BoolToConnectionColor}}" />
+                                    <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                                        <Label Text="Broker (MQTT)" TextColor="White" FontSize="16" FontAttributes="Bold" />
+                                        <Label Text="MQTT bağlantısı" FontSize="12" TextColor="#8A8F9C" />
+                                    </VerticalStackLayout>
+                                    <Label Grid.Column="2" VerticalOptions="Center" FontSize="14" FontAttributes="Bold"
+                                           Text="{Binding IsRobotConnected, Converter={StaticResource BoolToConnectionText}}"
+                                           TextColor="{Binding IsRobotConnected, Converter={StaticResource BoolToConnectionColor}}" />
+                                </Grid>
+                                <BoxView HeightRequest="1" Color="#262A35" />
+                                <Grid ColumnDefinitions="Auto,*,Auto,*" ColumnSpacing="10" RowSpacing="3">
+                                    <Label Grid.Column="0" Text="Adres" FontSize="11" TextColor="#8A8F9C" />
+                                    <Label Grid.Column="1" Text="{Binding BrokerEndpoint}" FontSize="11" TextColor="White" />
+                                    <Label Grid.Column="2" Text="Süreç" FontSize="11" TextColor="#8A8F9C" />
+                                    <Label Grid.Column="3" FontSize="11" TextColor="White" Text="Harici (servis)">
+                                        <Label.Triggers>
+                                            <DataTrigger TargetType="Label" Binding="{Binding IsBrokerRunning}" Value="True">
+                                                <Setter Property="Text" Value="Uygulama başlattı" />
+                                            </DataTrigger>
+                                        </Label.Triggers>
+                                    </Label>
+                                </Grid>
+                            </VerticalStackLayout>
+                        </Border>
+
+                            <!-- ===== ROBOT ===== -->
+                            <Border BackgroundColor="#14171F" StrokeThickness="1" Stroke="#262A35"
+                                StrokeShape="RoundRectangle 12" Padding="18,14"
+                                IsVisible="{Binding IsRobotOnline}">
+                            <VerticalStackLayout Spacing="10">
+                                <Grid ColumnDefinitions="20,*,Auto" ColumnSpacing="14">
+                                    <Border Grid.Column="0" WidthRequest="18" HeightRequest="18" StrokeThickness="0"
+                                            StrokeShape="RoundRectangle 9" VerticalOptions="Center"
+                                            BackgroundColor="{Binding IsRobotOnline, Converter={StaticResource BoolToConnectionColor}}" />
+                                    <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                                        <Label Text="Robot" TextColor="White" FontSize="16" FontAttributes="Bold" />
+                                        <Label Text="Telemetri akışı" FontSize="12" TextColor="#8A8F9C" />
+                                    </VerticalStackLayout>
+                                    <Label Grid.Column="2" VerticalOptions="Center" FontSize="14" FontAttributes="Bold"
+                                           Text="{Binding IsRobotOnline, Converter={StaticResource BoolToConnectionText}}"
+                                           TextColor="{Binding IsRobotOnline, Converter={StaticResource BoolToConnectionColor}}" />
+                                </Grid>
+                                <BoxView HeightRequest="1" Color="#262A35" />
+                                <!-- Telemetri verileri -->
+                                <Grid ColumnDefinitions="Auto,*,Auto,*,Auto,*" ColumnSpacing="10" RowSpacing="5"
+                                      RowDefinitions="Auto,Auto,Auto">
+                                    <Label Grid.Row="0" Grid.Column="0" Text="Mesafe" FontSize="11" TextColor="#8A8F9C" />
+                                    <Label Grid.Row="0" Grid.Column="1" FontSize="12" TextColor="White"
+                                           Text="{Binding Telemetry.DistanceMeters, StringFormat='{0:0.0} m', TargetNullValue='—'}" />
+                                    <Label Grid.Row="0" Grid.Column="2" Text="Hız" FontSize="11" TextColor="#8A8F9C" />
+                                    <Label Grid.Row="0" Grid.Column="3" FontSize="12" TextColor="White"
+                                           Text="{Binding Telemetry.Speed, StringFormat='{0:0.0}', TargetNullValue='—'}" />
+                                    <Label Grid.Row="0" Grid.Column="4" Text="Eğim" FontSize="11" TextColor="#8A8F9C" />
+                                    <Label Grid.Row="0" Grid.Column="5" FontSize="12" TextColor="White"
+                                           Text="{Binding Telemetry.TiltDegrees, StringFormat='{0:0.0}°', TargetNullValue='—'}" />
+
+                                    <Label Grid.Row="1" Grid.Column="0" Text="Basınç" FontSize="11" TextColor="#8A8F9C" />
+                                    <Label Grid.Row="1" Grid.Column="1" FontSize="12" TextColor="White"
+                                           Text="{Binding Telemetry.PressureBar, StringFormat='{0:0.0} bar', TargetNullValue='—'}" />
+                                    <Label Grid.Row="1" Grid.Column="2" Text="Sıcaklık" FontSize="11" TextColor="#8A8F9C" />
+                                    <Label Grid.Row="1" Grid.Column="3" FontSize="12" TextColor="White"
+                                           Text="{Binding Telemetry.TemperatureC, StringFormat='{0:0.0}°C', TargetNullValue='—'}" />
+                                    <Label Grid.Row="1" Grid.Column="4" Text="Nem" FontSize="11" TextColor="#8A8F9C" />
+                                    <Label Grid.Row="1" Grid.Column="5" FontSize="12" TextColor="White"
+                                           Text="{Binding Telemetry.HumidityPercent, StringFormat='{0:0}%', TargetNullValue='—'}" />
+
+                                    <Label Grid.Row="2" Grid.Column="0" Text="Batarya" FontSize="11" TextColor="#8A8F9C" />
+                                    <Label Grid.Row="2" Grid.Column="1" FontSize="12" TextColor="White"
+                                           Text="{Binding Telemetry.BatteryPercent, StringFormat='{0:0}%', TargetNullValue='—'}" />
+                                    <Label Grid.Row="2" Grid.Column="2" Text="Hareket" FontSize="11" TextColor="#8A8F9C" />
+                                    <Label Grid.Row="2" Grid.Column="3" Grid.ColumnSpan="3" FontSize="12" TextColor="White"
+                                           Text="{Binding Telemetry.ActiveMove, TargetNullValue='—'}" />
+                                </Grid>
+                                <!-- Alarmlar (yalnızca aktifken görünür) -->
+                                <HorizontalStackLayout Spacing="10">
+                                    <Label Text="⚠ GAZ ALARMI" FontSize="12" FontAttributes="Bold"
+                                           TextColor="{StaticResource ColorDanger}"
+                                           IsVisible="{Binding Telemetry.GasAlarm}" />
+                                    <Label Text="⚠ SU ALARMI" FontSize="12" FontAttributes="Bold" TextColor="Aqua"
+                                           IsVisible="{Binding Telemetry.WaterAlarm}" />
+                                </HorizontalStackLayout>
+                            </VerticalStackLayout>
+                        </Border>
+
+                            <!-- ===== PANO ===== -->
+                            <Border BackgroundColor="#14171F" StrokeThickness="1" Stroke="#262A35"
+                                StrokeShape="RoundRectangle 12" Padding="18,14"
+                                IsVisible="{Binding IsPanoOnline}">
+                            <VerticalStackLayout Spacing="10">
+                                <Grid ColumnDefinitions="20,*,Auto" ColumnSpacing="14">
+                                    <Border Grid.Column="0" WidthRequest="18" HeightRequest="18" StrokeThickness="0"
+                                            StrokeShape="RoundRectangle 9" VerticalOptions="Center"
+                                            BackgroundColor="{Binding IsPanoOnline, Converter={StaticResource BoolToConnectionColor}}" />
+                                    <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                                        <Label Text="Pano" TextColor="White" FontSize="16" FontAttributes="Bold" />
+                                        <Label Text="pano/log akışı" FontSize="12" TextColor="#8A8F9C" />
+                                    </VerticalStackLayout>
+                                    <Label Grid.Column="2" VerticalOptions="Center" FontSize="14" FontAttributes="Bold"
+                                           Text="{Binding IsPanoOnline, Converter={StaticResource BoolToConnectionText}}"
+                                           TextColor="{Binding IsPanoOnline, Converter={StaticResource BoolToConnectionColor}}" />
+                                </Grid>
+                                <BoxView HeightRequest="1" Color="#262A35" />
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                    <Label Grid.Column="0" Text="Son mesaj" FontSize="11" TextColor="#8A8F9C" VerticalOptions="Start" />
+                                    <Label Grid.Column="1" FontSize="12" TextColor="White"
+                                           Text="{Binding LastPanoMessage, TargetNullValue='— (henüz mesaj yok)'}" />
+                                </Grid>
+                            </VerticalStackLayout>
+                        </Border>
+
+                            <!-- ===== JOYSTICK ===== -->
+                            <Border BackgroundColor="#14171F" StrokeThickness="1" Stroke="#262A35"
+                                StrokeShape="RoundRectangle 12" Padding="18,14"
+                                IsVisible="{Binding IsGamepadConnected}">
+                            <VerticalStackLayout Spacing="10">
+                                <Grid ColumnDefinitions="20,*,Auto" ColumnSpacing="14">
+                                    <Border Grid.Column="0" WidthRequest="18" HeightRequest="18" StrokeThickness="0"
+                                            StrokeShape="RoundRectangle 9" VerticalOptions="Center"
+                                            BackgroundColor="{Binding IsGamepadConnected, Converter={StaticResource BoolToConnectionColor}}" />
+                                    <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                                        <Label Text="Joystick" TextColor="White" FontSize="16" FontAttributes="Bold" />
+                                        <Label Text="{Binding GamepadStatusText}" FontSize="12" TextColor="#8A8F9C" />
+                                    </VerticalStackLayout>
+                                    <Label Grid.Column="2" VerticalOptions="Center" FontSize="14" FontAttributes="Bold"
+                                           Text="{Binding IsGamepadConnected, Converter={StaticResource BoolToConnectionText}}"
+                                           TextColor="{Binding IsGamepadConnected, Converter={StaticResource BoolToConnectionColor}}"
+                                           IsVisible="{Binding IsGamepadConnected}" />
+                                    <Button Grid.Column="2" Text="Yeniden Bağla" Style="{StaticResource SecondaryButton}"
+                                            FontSize="13" Padding="16,6" Command="{Binding ReconnectGamepadCommand}"
+                                            IsVisible="{Binding IsGamepadConnected, Converter={StaticResource InvertedBool}}" />
+                                </Grid>
+                                <BoxView HeightRequest="1" Color="#262A35" />
+                                <Grid ColumnDefinitions="Auto,*,Auto,*,Auto,*" ColumnSpacing="10" RowSpacing="5"
+                                      RowDefinitions="Auto,Auto,Auto">
+                                    <Label Grid.Row="0" Grid.Column="0" Text="Sol X" FontSize="11" TextColor="#8A8F9C" />
+                                    <Label Grid.Row="0" Grid.Column="1" Text="{Binding GamepadLX, StringFormat='{0:0.00}'}" FontSize="12" TextColor="White" />
+                                    <Label Grid.Row="0" Grid.Column="2" Text="Sol Y" FontSize="11" TextColor="#8A8F9C" />
+                                    <Label Grid.Row="0" Grid.Column="3" Text="{Binding GamepadLY, StringFormat='{0:0.00}'}" FontSize="12" TextColor="White" />
+                                    <Label Grid.Row="0" Grid.Column="4" Text="LT" FontSize="11" TextColor="#8A8F9C" />
+                                    <Label Grid.Row="0" Grid.Column="5" Text="{Binding GamepadLT, StringFormat='{0:0.00}'}" FontSize="12" TextColor="White" />
+
+                                    <Label Grid.Row="1" Grid.Column="0" Text="Sağ X" FontSize="11" TextColor="#8A8F9C" />
+                                    <Label Grid.Row="1" Grid.Column="1" Text="{Binding GamepadRX, StringFormat='{0:0.00}'}" FontSize="12" TextColor="White" />
+                                    <Label Grid.Row="1" Grid.Column="2" Text="Sağ Y" FontSize="11" TextColor="#8A8F9C" />
+                                    <Label Grid.Row="1" Grid.Column="3" Text="{Binding GamepadRY, StringFormat='{0:0.00}'}" FontSize="12" TextColor="White" />
+                                    <Label Grid.Row="1" Grid.Column="4" Text="RT" FontSize="11" TextColor="#8A8F9C" />
+                                    <Label Grid.Row="1" Grid.Column="5" Text="{Binding GamepadRT, StringFormat='{0:0.00}'}" FontSize="12" TextColor="White" />
+
+                                    <Label Grid.Row="2" Grid.Column="0" Text="Butonlar" FontSize="11" TextColor="#8A8F9C" />
+                                    <Label Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="5" Text="{Binding GamepadButtons}" FontSize="12" TextColor="White" />
+                                </Grid>
+                                <Label Text="{Binding GamepadDiag, StringFormat='XInput: {0}'}" FontSize="10"
+                                       TextColor="#6B7280" />
+                            </VerticalStackLayout>
+                            </Border>
+                          </VerticalStackLayout>
+
+                          <!-- ░░░ SAĞ: BAĞLI DEĞİL ░░░ -->
+                          <VerticalStackLayout Grid.Column="1" Spacing="12">
+                            <Label Text="✕ BAĞLI DEĞİL" TextColor="#FF6B6B" FontSize="13" FontAttributes="Bold" />
+
+                            <!-- Kamera (bağlı değil) -->
+                            <Border BackgroundColor="#14171F" StrokeThickness="1" Stroke="#3A2A2A"
+                                    StrokeShape="RoundRectangle 12" Padding="16,12"
+                                    IsVisible="{Binding IsCameraOnline, Converter={StaticResource InvertedBool}}">
+                                <Grid ColumnDefinitions="16,*,Auto" ColumnSpacing="10">
+                                    <Border Grid.Column="0" WidthRequest="14" HeightRequest="14" StrokeThickness="0"
+                                            StrokeShape="RoundRectangle 7" VerticalOptions="Center"
+                                            BackgroundColor="{Binding IsCameraOnline, Converter={StaticResource BoolToConnectionColor}}" />
+                                    <Label Grid.Column="1" Text="Kamera (RTSP)" TextColor="White" FontSize="14"
+                                           FontAttributes="Bold" VerticalOptions="Center" />
+                                    <Button Grid.Column="2" Text="Bağlan" Style="{StaticResource SecondaryButton}"
+                                            FontSize="12" Padding="12,4" Command="{Binding StartStreamCommand}" />
+                                </Grid>
+                            </Border>
+
+                            <!-- Broker (bağlı değil) -->
+                            <Border BackgroundColor="#14171F" StrokeThickness="1" Stroke="#3A2A2A"
+                                    StrokeShape="RoundRectangle 12" Padding="16,12"
+                                    IsVisible="{Binding IsRobotConnected, Converter={StaticResource InvertedBool}}">
+                                <Grid ColumnDefinitions="16,*,Auto" ColumnSpacing="10">
+                                    <Border Grid.Column="0" WidthRequest="14" HeightRequest="14" StrokeThickness="0"
+                                            StrokeShape="RoundRectangle 7" VerticalOptions="Center"
+                                            BackgroundColor="{Binding IsRobotConnected, Converter={StaticResource BoolToConnectionColor}}" />
+                                    <Label Grid.Column="1" Text="Broker (MQTT)" TextColor="White" FontSize="14"
+                                           FontAttributes="Bold" VerticalOptions="Center" />
+                                    <Button Grid.Column="2" Text="Bağlan" Style="{StaticResource SecondaryButton}"
+                                            FontSize="12" Padding="12,4" Command="{Binding ReconnectBrokerCommand}" />
+                                </Grid>
+                            </Border>
+
+                            <!-- Robot (bağlı değil) -->
+                            <Border BackgroundColor="#14171F" StrokeThickness="1" Stroke="#3A2A2A"
+                                    StrokeShape="RoundRectangle 12" Padding="16,12"
+                                    IsVisible="{Binding IsRobotOnline, Converter={StaticResource InvertedBool}}">
+                                <Grid ColumnDefinitions="16,*,Auto" ColumnSpacing="10">
+                                    <Border Grid.Column="0" WidthRequest="14" HeightRequest="14" StrokeThickness="0"
+                                            StrokeShape="RoundRectangle 7" VerticalOptions="Center"
+                                            BackgroundColor="{Binding IsRobotOnline, Converter={StaticResource BoolToConnectionColor}}" />
+                                    <Label Grid.Column="1" Text="Robot" TextColor="White" FontSize="14"
+                                           FontAttributes="Bold" VerticalOptions="Center" />
+                                    <Label Grid.Column="2" Text="Telemetri bekleniyor" FontSize="11" TextColor="#8A8F9C"
+                                           VerticalOptions="Center" />
+                                </Grid>
+                            </Border>
+
+                            <!-- Pano (bağlı değil) -->
+                            <Border BackgroundColor="#14171F" StrokeThickness="1" Stroke="#3A2A2A"
+                                    StrokeShape="RoundRectangle 12" Padding="16,12"
+                                    IsVisible="{Binding IsPanoOnline, Converter={StaticResource InvertedBool}}">
+                                <Grid ColumnDefinitions="16,*,Auto" ColumnSpacing="10">
+                                    <Border Grid.Column="0" WidthRequest="14" HeightRequest="14" StrokeThickness="0"
+                                            StrokeShape="RoundRectangle 7" VerticalOptions="Center"
+                                            BackgroundColor="{Binding IsPanoOnline, Converter={StaticResource BoolToConnectionColor}}" />
+                                    <Label Grid.Column="1" Text="Pano" TextColor="White" FontSize="14"
+                                           FontAttributes="Bold" VerticalOptions="Center" />
+                                    <Label Grid.Column="2" Text="Log bekleniyor" FontSize="11" TextColor="#8A8F9C"
+                                           VerticalOptions="Center" />
+                                </Grid>
+                            </Border>
+
+                            <!-- Joystick (bağlı değil) -->
+                            <Border BackgroundColor="#14171F" StrokeThickness="1" Stroke="#3A2A2A"
+                                    StrokeShape="RoundRectangle 12" Padding="16,12"
+                                    IsVisible="{Binding IsGamepadConnected, Converter={StaticResource InvertedBool}}">
+                                <Grid ColumnDefinitions="16,*,Auto" ColumnSpacing="10">
+                                    <Border Grid.Column="0" WidthRequest="14" HeightRequest="14" StrokeThickness="0"
+                                            StrokeShape="RoundRectangle 7" VerticalOptions="Center"
+                                            BackgroundColor="{Binding IsGamepadConnected, Converter={StaticResource BoolToConnectionColor}}" />
+                                    <Label Grid.Column="1" Text="Joystick" TextColor="White" FontSize="14"
+                                           FontAttributes="Bold" VerticalOptions="Center" />
+                                    <Button Grid.Column="2" Text="Yeniden Bağla" Style="{StaticResource SecondaryButton}"
+                                            FontSize="12" Padding="12,4" Command="{Binding ReconnectGamepadCommand}" />
+                                </Grid>
+                            </Border>
+                          </VerticalStackLayout>
+                        </Grid>
+                    </VerticalStackLayout>
+                  </ScrollView>
+
                   <!-- ===== KAMERA ===== -->
                   <Grid IsVisible="{Binding IsBigCamera}">
                     <!-- Canlı kamera: SkiaSharp composite kare.
@@ -61,7 +361,7 @@
                   <!-- /KAMERA -->
 
                   <!-- ===== MQTT LOG (büyük görünüm) ===== -->
-                  <Grid IsVisible="{Binding IsBigMqtt}" RowDefinitions="Auto,*" Padding="14" RowSpacing="8">
+                  <Grid IsVisible="{Binding IsBigMqtt}" RowDefinitions="Auto,Auto,*" Padding="14" RowSpacing="8">
                       <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
                           <Label Grid.Column="0" Text="MQTT TRAFİK" TextColor="White"
                                  FontAttributes="Bold" FontSize="15" VerticalOptions="Center" />
@@ -79,7 +379,41 @@
                               </Button.Triggers>
                           </Button>
                       </Grid>
-                      <CollectionView Grid.Row="1" ItemsSource="{Binding MqttLog}"
+
+                      <!-- Elle yayın tezgahı (bring-up): joystick olmadan bilinen komut gönder -->
+                      <Border Grid.Row="1" BackgroundColor="#11161F" StrokeThickness="0"
+                              StrokeShape="RoundRectangle 8" Padding="10">
+                          <VerticalStackLayout Spacing="8">
+                              <Label Text="ELLE YAYIN — joystick olmadan robotu test et" FontSize="11"
+                                     FontAttributes="Bold" TextColor="{StaticResource ColorCyan}" />
+                              <Label Text="Test sürüşü DUR'a basana kadar süreklidir (firmware: ileri=-100, geri=+100, sağ=lr-100, sol=lr+100)."
+                                     FontSize="9" TextColor="#8A8F9C" />
+                              <!-- Sürüş testi (streamer üzerinden sürekli — watchdog beslenir) -->
+                              <FlexLayout Wrap="Wrap" JustifyContent="Start">
+                                  <Button Text="▲ İleri" Style="{StaticResource QuietButton}" FontSize="11" Margin="0,0,6,6"
+                                          Command="{Binding TestDriveCommand}" CommandParameter="fwd" />
+                                  <Button Text="▼ Geri" Style="{StaticResource QuietButton}" FontSize="11" Margin="0,0,6,6"
+                                          Command="{Binding TestDriveCommand}" CommandParameter="back" />
+                                  <Button Text="◀ Sol" Style="{StaticResource QuietButton}" FontSize="11" Margin="0,0,6,6"
+                                          Command="{Binding TestDriveCommand}" CommandParameter="left" />
+                                  <Button Text="▶ Sağ" Style="{StaticResource QuietButton}" FontSize="11" Margin="0,0,6,6"
+                                          Command="{Binding TestDriveCommand}" CommandParameter="right" />
+                                  <Button Text="■ DUR" Style="{StaticResource DangerButton}" FontSize="11" Margin="0,0,6,6"
+                                          Command="{Binding TestDriveCommand}" CommandParameter="stop" />
+                              </FlexLayout>
+                              <!-- Ham protokol tek-atış (kafa/fren/diag vb. için) -->
+                              <Grid ColumnDefinitions="*,90,Auto" ColumnSpacing="6">
+                                  <Picker Grid.Column="0" Title="topic" ItemsSource="{Binding ManualTopicOptions}"
+                                          SelectedItem="{Binding ManualTopic}" FontSize="11" TextColor="White" />
+                                  <Entry Grid.Column="1" Text="{Binding ManualPayload}" Placeholder="değer"
+                                         Keyboard="Numeric" FontSize="12" TextColor="White" />
+                                  <Button Grid.Column="2" Text="Gönder" Style="{StaticResource SecondaryButton}"
+                                          FontSize="12" Padding="14,4" Command="{Binding ManualPublishCustomCommand}" />
+                              </Grid>
+                          </VerticalStackLayout>
+                      </Border>
+
+                      <CollectionView Grid.Row="2" ItemsSource="{Binding MqttLog}"
                                       VerticalScrollBarVisibility="Always">
                           <CollectionView.EmptyView>
                               <Label Text="Henüz mesaj yok — broker'a bağlan" TextColor="#8A8F9C"
@@ -106,9 +440,9 @@
                       <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
                           <Label Grid.Column="0" Text="CİHAZ KONSOLU" TextColor="White"
                                  FontAttributes="Bold" FontSize="15" VerticalOptions="Center" />
-                          <Button Grid.Column="1" Text="🤖 Robot Teşhis" Style="{StaticResource SecondaryButton}"
+                          <Button Grid.Column="1" Text="{Binding RobotDiagButtonText}" Style="{StaticResource SecondaryButton}"
                                   FontSize="12" Padding="10,4" Command="{Binding RunRobotDiagnosticsCommand}" />
-                          <Button Grid.Column="2" Text="🛠 Pano Teşhis" Style="{StaticResource SecondaryButton}"
+                          <Button Grid.Column="2" Text="{Binding PanoDiagButtonText}" Style="{StaticResource SecondaryButton}"
                                   FontSize="12" Padding="10,4" Command="{Binding RunPanoDiagnosticsCommand}" />
                           <Button Grid.Column="3" Text="🗑" Style="{StaticResource QuietButton}"
                                   Padding="10,4" Command="{Binding ClearDeviceLogCommand}" />
@@ -161,6 +495,85 @@
         <!-- ============== RIGHT PANEL ============== -->
         <ScrollView Grid.Row="0" Grid.Column="1">
             <VerticalStackLayout Spacing="10">
+
+                    <!-- ============== ÇEVRE BİRİMLERİ (online/offline) ============== -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="ÇEVRE BİRİMLERİ" Style="{StaticResource SectionTitle}" />
+
+                            <!-- Kamera -->
+                            <Grid ColumnDefinitions="14,*,Auto" ColumnSpacing="8">
+                                <Border Grid.Column="0" WidthRequest="11" HeightRequest="11" StrokeThickness="0"
+                                        StrokeShape="RoundRectangle 6" VerticalOptions="Center"
+                                        BackgroundColor="{Binding IsCameraOnline, Converter={StaticResource BoolToConnectionColor}}" />
+                                <Label Grid.Column="1" Text="Kamera (RTSP)" VerticalOptions="Center"
+                                       FontSize="13" TextColor="{StaticResource ColorTextPrimary}" />
+                                <Label Grid.Column="2" VerticalOptions="Center" FontSize="11"
+                                       Text="{Binding IsCameraOnline, Converter={StaticResource BoolToConnectionText}}"
+                                       TextColor="{Binding IsCameraOnline, Converter={StaticResource BoolToConnectionColor}}"
+                                       IsVisible="{Binding IsCameraOnline}" />
+                                <Button Grid.Column="2" Text="Bağlan" Style="{StaticResource QuietButton}"
+                                        FontSize="11" Padding="10,2" Command="{Binding StartStreamCommand}"
+                                        IsVisible="{Binding IsCameraOnline, Converter={StaticResource InvertedBool}}" />
+                            </Grid>
+
+                            <!-- Broker -->
+                            <Grid ColumnDefinitions="14,*,Auto" ColumnSpacing="8">
+                                <Border Grid.Column="0" WidthRequest="11" HeightRequest="11" StrokeThickness="0"
+                                        StrokeShape="RoundRectangle 6" VerticalOptions="Center"
+                                        BackgroundColor="{Binding IsRobotConnected, Converter={StaticResource BoolToConnectionColor}}" />
+                                <Label Grid.Column="1" Text="Broker (MQTT)" VerticalOptions="Center"
+                                       FontSize="13" TextColor="{StaticResource ColorTextPrimary}" />
+                                <Label Grid.Column="2" VerticalOptions="Center" FontSize="11"
+                                       Text="{Binding IsRobotConnected, Converter={StaticResource BoolToConnectionText}}"
+                                       TextColor="{Binding IsRobotConnected, Converter={StaticResource BoolToConnectionColor}}"
+                                       IsVisible="{Binding IsRobotConnected}" />
+                                <Button Grid.Column="2" Text="Bağlan" Style="{StaticResource QuietButton}"
+                                        FontSize="11" Padding="10,2" Command="{Binding ReconnectBrokerCommand}"
+                                        IsVisible="{Binding IsRobotConnected, Converter={StaticResource InvertedBool}}" />
+                            </Grid>
+
+                            <!-- Robot -->
+                            <Grid ColumnDefinitions="14,*,Auto" ColumnSpacing="8">
+                                <Border Grid.Column="0" WidthRequest="11" HeightRequest="11" StrokeThickness="0"
+                                        StrokeShape="RoundRectangle 6" VerticalOptions="Center"
+                                        BackgroundColor="{Binding IsRobotOnline, Converter={StaticResource BoolToConnectionColor}}" />
+                                <Label Grid.Column="1" Text="Robot" VerticalOptions="Center"
+                                       FontSize="13" TextColor="{StaticResource ColorTextPrimary}" />
+                                <Label Grid.Column="2" VerticalOptions="Center" FontSize="11"
+                                       Text="{Binding IsRobotOnline, Converter={StaticResource BoolToConnectionText}}"
+                                       TextColor="{Binding IsRobotOnline, Converter={StaticResource BoolToConnectionColor}}" />
+                            </Grid>
+
+                            <!-- Pano -->
+                            <Grid ColumnDefinitions="14,*,Auto" ColumnSpacing="8">
+                                <Border Grid.Column="0" WidthRequest="11" HeightRequest="11" StrokeThickness="0"
+                                        StrokeShape="RoundRectangle 6" VerticalOptions="Center"
+                                        BackgroundColor="{Binding IsPanoOnline, Converter={StaticResource BoolToConnectionColor}}" />
+                                <Label Grid.Column="1" Text="Pano" VerticalOptions="Center"
+                                       FontSize="13" TextColor="{StaticResource ColorTextPrimary}" />
+                                <Label Grid.Column="2" VerticalOptions="Center" FontSize="11"
+                                       Text="{Binding IsPanoOnline, Converter={StaticResource BoolToConnectionText}}"
+                                       TextColor="{Binding IsPanoOnline, Converter={StaticResource BoolToConnectionColor}}" />
+                            </Grid>
+
+                            <!-- Joystick -->
+                            <Grid ColumnDefinitions="14,*,Auto" ColumnSpacing="8">
+                                <Border Grid.Column="0" WidthRequest="11" HeightRequest="11" StrokeThickness="0"
+                                        StrokeShape="RoundRectangle 6" VerticalOptions="Center"
+                                        BackgroundColor="{Binding IsGamepadConnected, Converter={StaticResource BoolToConnectionColor}}" />
+                                <Label Grid.Column="1" Text="Joystick" VerticalOptions="Center"
+                                       FontSize="13" TextColor="{StaticResource ColorTextPrimary}" />
+                                <Label Grid.Column="2" VerticalOptions="Center" FontSize="11"
+                                       Text="{Binding IsGamepadConnected, Converter={StaticResource BoolToConnectionText}}"
+                                       TextColor="{Binding IsGamepadConnected, Converter={StaticResource BoolToConnectionColor}}"
+                                       IsVisible="{Binding IsGamepadConnected}" />
+                                <Button Grid.Column="2" Text="Yeniden Bağla" Style="{StaticResource QuietButton}"
+                                        FontSize="11" Padding="10,2" Command="{Binding ReconnectGamepadCommand}"
+                                        IsVisible="{Binding IsGamepadConnected, Converter={StaticResource InvertedBool}}" />
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
 
                     <!-- ============== DEFECT MINI-LIST ============== -->
                     <Border Style="{StaticResource CardBorder}"
@@ -279,10 +692,10 @@
 
                             <!-- Teşhis tetikleme butonları -->
                             <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
-                                <Button Grid.Column="0" Text="🤖 Robot Teşhis"
+                                <Button Grid.Column="0" Text="{Binding RobotDiagButtonText}"
                                         Style="{StaticResource SecondaryButton}" FontSize="12" Padding="0,6"
                                         Command="{Binding RunRobotDiagnosticsCommand}" />
-                                <Button Grid.Column="1" Text="🛠 Pano Teşhis"
+                                <Button Grid.Column="1" Text="{Binding PanoDiagButtonText}"
                                         Style="{StaticResource SecondaryButton}" FontSize="12" Padding="0,6"
                                         Command="{Binding RunPanoDiagnosticsCommand}" />
                             </Grid>

@@ -90,18 +90,86 @@ public partial class LiveViewModel : BaseViewModel
     [RelayCommand]
     private void ClearMqttLog() => MqttLog.Clear();
 
-    // ===== Büyük alan görünüm seçici (teşhis ekranı): Kamera / MQTT Log / Robot-Pano Konsolu =====
-    public List<string> BigViewOptions { get; } = new() { "Kamera", "MQTT Log", "Robot/Pano Konsolu" };
-    [ObservableProperty] private string bigViewMode = "Kamera";
+    // ===== Büyük alan görünüm seçici (teşhis ekranı): Çevre Birimleri / Kamera / MQTT Log / Robot-Pano Konsolu =====
+    public List<string> BigViewOptions { get; } = new() { "Çevre Birimleri", "Kamera", "MQTT Log", "Robot/Pano Konsolu" };
+    [ObservableProperty] private string bigViewMode = "Çevre Birimleri"; // varsayılan: durum paneli
+    public bool IsBigStatus  => BigViewMode == "Çevre Birimleri";
     public bool IsBigCamera  => BigViewMode == "Kamera";
     public bool IsBigMqtt    => BigViewMode == "MQTT Log";
     public bool IsBigConsole => BigViewMode == "Robot/Pano Konsolu";
     partial void OnBigViewModeChanged(string value)
     {
+        OnPropertyChanged(nameof(IsBigStatus));
         OnPropertyChanged(nameof(IsBigCamera));
         OnPropertyChanged(nameof(IsBigMqtt));
         OnPropertyChanged(nameof(IsBigConsole));
     }
+
+    // ===== Çevre birimi online/offline göstergeleri =====
+    // Broker = IsRobotConnected (MQTT bağlı), Joystick = IsGamepadConnected.
+    // Robot = telemetri son ~6 sn içinde geldiyse, Pano = pano/log son ~10 sn içinde geldiyse.
+    [ObservableProperty] private bool isRobotOnline;
+    [ObservableProperty] private bool isPanoOnline;
+    [ObservableProperty] private string brokerEndpoint = "—";
+    [ObservableProperty] private string? lastPanoMessage;
+    [ObservableProperty] private string? lastRobotMessage;
+    [ObservableProperty] private string? gamepadDiag;   // XInput slot teşhisi
+    private DateTime? _lastPanoAt;
+    private DateTime? _lastRobotAt;   // robot/log + robot/diag cevabı da canlılık işareti
+
+    /// <summary>Joystick sökülüp takıldığında elle yeniden bağlama.</summary>
+    [RelayCommand]
+    private void ReconnectGamepad()
+    {
+        DisableGamepad();
+        EnableGamepad();
+        StatusMessage = "Joystick yeniden bağlanıyor…";
+    }
+
+    /// <summary>Broker'a (yerel başlat + ) elle yeniden bağlanma.</summary>
+    [RelayCommand]
+    private async Task ReconnectBroker()
+    {
+        await EnsureLocalBrokerAsync();
+        await AutoConnectBrokerAsync();
+    }
+
+    /// <summary>Saat timer'ından çağrılır — robot/pano canlılığını tazeler.</summary>
+    private void RefreshPeripheralStatus()
+    {
+        var now = DateTime.Now;
+        // Robot canlı = son ~6 sn içinde TELEMETRİ (accl_x/voltage/...) VEYA robot/log geldiyse.
+        // Firmware telemetriyi yalnızca değer değişince yayınlar; robot dururken log/diag akar ama
+        // telemetri akmaz — bu yüzden robot/log da canlılık işareti sayılır.
+        DateTime? lastRobot = Telemetry.LastUpdate;
+        if (_lastRobotAt is DateTime ra && (lastRobot is null || ra > lastRobot)) lastRobot = ra;
+
+        IsRobotOnline = lastRobot is DateTime ru && (now - ru).TotalSeconds < 6;
+        IsPanoOnline  = _lastPanoAt is DateTime pu && (now - pu).TotalSeconds < 10;
+    }
+
+    // ===== Kamera durumu + Kalkış öncesi "Sistem Hazır" kontrolü =====
+    /// <summary>Kamera bağlı = canlı kare akıyor (RTSP yayını çalışıyor).</summary>
+    public bool IsCameraOnline => HasLiveFrame;
+
+    /// <summary>Kalkışa hazır: kamera + broker + robot + joystick tamam.</summary>
+    public bool SystemReady => HasLiveFrame && IsRobotConnected && IsRobotOnline && IsGamepadConnected;
+
+    public string SystemReadyText => SystemReady
+        ? "✓ SİSTEM HAZIR — Kalkışa hazır"
+        : "⚠ Sistem hazır değil — eksik birimleri tamamlayın";
+
+    private void RaiseReadiness()
+    {
+        OnPropertyChanged(nameof(IsCameraOnline));
+        OnPropertyChanged(nameof(SystemReady));
+        OnPropertyChanged(nameof(SystemReadyText));
+    }
+
+    partial void OnHasLiveFrameChanged(bool value)       => RaiseReadiness();
+    partial void OnIsRobotConnectedChanged(bool value)   => RaiseReadiness();
+    partial void OnIsRobotOnlineChanged(bool value)      => RaiseReadiness();
+    partial void OnIsGamepadConnectedChanged(bool value) => RaiseReadiness();
 
     // ===== Cihaz Konsolu (robot/log + pano/log) — uzaktan Serial Monitor =====
     public ObservableCollection<DeviceLogEntry> DeviceLog { get; } = new();
@@ -138,21 +206,89 @@ public partial class LiveViewModel : BaseViewModel
         await AutoConnectBrokerAsync(); // PC'yi otomatik broker'a bağla
     }
 
-    [RelayCommand] private Task RunRobotDiagnostics() => RequestDiagnosticsAsync("robot/diag", "Robot");
-    [RelayCommand] private Task RunPanoDiagnostics()  => RequestDiagnosticsAsync("pano/diag", "Pano");
+    // ===== Sürekli teşhis (toggle): basınca 500 ms'de bir robot/diag · pano/diag yayınlar =====
+    // Joystick komutlarına robot/pano nasıl tepki veriyor canlı izlemek için. Tekrar basınca durur.
+    [ObservableProperty] private bool isRobotDiagPolling;
+    [ObservableProperty] private bool isPanoDiagPolling;
+
+    public string RobotDiagButtonText => IsRobotDiagPolling ? "■ Robot Teşhis Durdur" : "🤖 Robot Teşhis";
+    public string PanoDiagButtonText  => IsPanoDiagPolling  ? "■ Pano Teşhis Durdur"  : "🛠 Pano Teşhis";
+
+    partial void OnIsRobotDiagPollingChanged(bool value) => OnPropertyChanged(nameof(RobotDiagButtonText));
+    partial void OnIsPanoDiagPollingChanged(bool value)  => OnPropertyChanged(nameof(PanoDiagButtonText));
+
+    [RelayCommand]
+    private void RunRobotDiagnostics()
+    {
+        if (_mqtt is null || !_mqtt.IsConnected) { StatusMessage = "Broker bağlı değil"; return; }
+        IsRobotDiagPolling = !IsRobotDiagPolling;
+        StatusMessage = IsRobotDiagPolling
+            ? "Robot teşhis: 500 ms'de bir gönderiliyor — tekrar bas durdur"
+            : "Robot teşhis durduruldu";
+        if (IsRobotDiagPolling) _ = RequestDiagnosticsAsync("robot/diag", "Robot"); // ilk istek hemen
+    }
+
+    [RelayCommand]
+    private void RunPanoDiagnostics()
+    {
+        if (_mqtt is null || !_mqtt.IsConnected) { StatusMessage = "Broker bağlı değil"; return; }
+        IsPanoDiagPolling = !IsPanoDiagPolling;
+        StatusMessage = IsPanoDiagPolling
+            ? "Pano teşhis: 500 ms'de bir gönderiliyor — tekrar bas durdur"
+            : "Pano teşhis durduruldu";
+        if (IsPanoDiagPolling) _ = RequestDiagnosticsAsync("pano/diag", "Pano"); // ilk istek hemen
+    }
+
+    // ===== Elle yayın (bring-up testi): joystick olmadan bilinen komut gönder =====
+    // Robotu izole test eder — "firmware komutu harekete çeviriyor mu?" sorusunu joystick eşlemesinden ayırır.
+    public List<string> ManualTopicOptions { get; } = new()
+    {
+        FirmwareTopics.ForwardBackward, FirmwareTopics.LeftRight, FirmwareTopics.Brake,
+        FirmwareTopics.Head180UpDown, FirmwareTopics.Head360CwCcw, FirmwareTopics.Led,
+        FirmwareTopics.Gerisarma, FirmwareTopics.MetreSifir,
+    };
+    [ObservableProperty] private string manualTopic = FirmwareTopics.ForwardBackward;
+    [ObservableProperty] private string manualPayload = "-100";
+
+    /// <summary>Seçili topic'e elle ham değer yayınlar (Entry'den) — protokol seviyesi tek-atış test.</summary>
+    [RelayCommand]
+    private Task ManualPublishCustom() => PublishRawSafeAsync(ManualTopic, (ManualPayload ?? "").Trim());
+
+    /// <summary>
+    /// Test sürüşü — streamer üzerinden SÜREKLİ yayınlar (watchdog beslenir, robot DUR'a kadar hareket eder).
+    /// Firmware doğru işaret/eşiğini streamer uygular: İleri→fb=-100, Geri→+100, Sağ→lr=-100, Sol→+100.
+    /// </summary>
+    [RelayCommand]
+    private void TestDrive(string dir)
+    {
+        if (_mqtt is null || !_mqtt.IsConnected) { StatusMessage = "Broker bağlı değil"; return; }
+        switch (dir)
+        {
+            case "fwd":   _drive.SetMove(RobotCommandType.MoveForward, 1f);  StatusMessage = "TEST: İleri (fb=-100) — DUR'a bas"; break;
+            case "back":  _drive.SetMove(RobotCommandType.MoveBackward, 1f); StatusMessage = "TEST: Geri (fb=+100) — DUR'a bas";  break;
+            case "left":  _drive.SetMove(RobotCommandType.TurnLeft, 1f);     StatusMessage = "TEST: Sol (lr=+100) — DUR'a bas";    break;
+            case "right": _drive.SetMove(RobotCommandType.TurnRight, 1f);    StatusMessage = "TEST: Sağ (lr=-100) — DUR'a bas";    break;
+            default:      _ = _drive.StopAsync();                            StatusMessage = "DUR (fb=0, lr=0, brake=1)";          break;
+        }
+    }
+
+    private async Task PublishRawSafeAsync(string topic, string payload)
+    {
+        if (_mqtt is null || !_mqtt.IsConnected) { StatusMessage = "Broker bağlı değil"; return; }
+        if (string.IsNullOrWhiteSpace(topic)) { StatusMessage = "Topic boş"; return; }
+        try
+        {
+            await _mqtt.PublishRawAsync(topic, payload);
+            StatusMessage = $"Yayınlandı: {topic} = {payload}";
+        }
+        catch (Exception ex) { StatusMessage = $"Yayın hatası: {ex.Message}"; }
+    }
 
     private async Task RequestDiagnosticsAsync(string topic, string label)
     {
-        if (_mqtt is null || !_mqtt.IsConnected) { StatusMessage = "Broker bağlı değil"; return; }
-        try
-        {
-            await _mqtt.PublishRawAsync(topic, "1");
-            StatusMessage = $"{label} teşhis istendi — konsola rapor düşecek";
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Teşhis gönderilemedi: {ex.Message}";
-        }
+        if (_mqtt is null || !_mqtt.IsConnected) return;
+        try { await _mqtt.PublishRawAsync(topic, "1"); }
+        catch { /* geçici hata — sürekli teşhis bir sonraki tick'te yeniden dener */ }
     }
 
     /// <summary>robot/log ve pano/log topic'lerine abone olur (broker bağlanınca çağrılır).</summary>
@@ -163,6 +299,8 @@ public partial class LiveViewModel : BaseViewModel
         {
             await _mqtt.SubscribeAsync("robot/log");
             await _mqtt.SubscribeAsync("pano/log");
+            await _mqtt.SubscribeAsync(FirmwareTopics.RobotAlive); // canlılık heartbeat
+            await _mqtt.SubscribeAsync(FirmwareTopics.PanoAlive);
         }
         catch { /* abone olunamadıysa log gelmez ama akış kritik değil */ }
     }
@@ -171,6 +309,11 @@ public partial class LiveViewModel : BaseViewModel
     private void OnDeviceMessage(object? sender, MQTTnet.MqttApplicationMessageReceivedEventArgs e)
     {
         var topic = e.ApplicationMessage.Topic;
+
+        // Heartbeat — yalnızca canlılık işareti, konsola YAZMA (temiz kalsın)
+        if (topic == FirmwareTopics.RobotAlive) { _lastRobotAt = DateTime.Now; return; }
+        if (topic == FirmwareTopics.PanoAlive)  { _lastPanoAt  = DateTime.Now; return; }
+
         string? source = topic switch
         {
             "robot/log" => "robot",
@@ -180,8 +323,12 @@ public partial class LiveViewModel : BaseViewModel
         if (source is null) return;
 
         var msg = System.Text.Encoding.UTF8.GetString(e.ApplicationMessage.Payload.ToArray());
+        if (source == "pano")       _lastPanoAt  = DateTime.Now;   // pano canlılık işareti
+        else if (source == "robot") _lastRobotAt = DateTime.Now;   // robot canlılık işareti (log/diag)
         MainThread.BeginInvokeOnMainThread(() =>
         {
+            if (source == "pano") LastPanoMessage = msg;
+            else if (source == "robot") LastRobotMessage = msg;
             DeviceLog.Insert(0, new DeviceLogEntry(DateTime.Now, source, msg)); // en yeni üstte
             while (DeviceLog.Count > DeviceLogMaxEntries)
                 DeviceLog.RemoveAt(DeviceLog.Count - 1);
@@ -392,6 +539,7 @@ public partial class LiveViewModel : BaseViewModel
         _pipeline.ConfigureOverlayFont(_settings.OverlayFontFamily, _settings.OverlayFontScale);
 
         _mqtt?.Configure(_settings.TopicPrefix, _settings.RobotId);
+        BrokerEndpoint = $"{_settings.BrokerHost}:{_settings.BrokerPort}";
 
         var customers = await _db.GetCustomersAsync();
         Customers.Clear();
@@ -407,9 +555,33 @@ public partial class LiveViewModel : BaseViewModel
         if (!IsStreaming)
             await StartStreamAsync();
 
+        // Yerel Mosquitto broker'ı otomatik başlat (host local + kurulu ise)
+        await EnsureLocalBrokerAsync();
+
         // Broker otomatik bağlan (henüz bağlı değilse)
         if (_mqtt is not null && !_mqtt.IsConnected)
             await AutoConnectBrokerAsync();
+    }
+
+    /// <summary>
+    /// Host yerel (127.0.0.1/localhost) ve Mosquitto kuruluysa, broker sürecini açılışta
+    /// otomatik başlatır. Zaten çalışıyorsa (port dolu) StartAsync false döner; sorun değil,
+    /// AutoConnect mevcut broker'a bağlanır. Uzak broker'da hiçbir şey başlatılmaz.
+    /// </summary>
+    private async Task EnsureLocalBrokerAsync()
+    {
+        if (_settings is null) return;
+        var host = _settings.BrokerHost?.Trim().ToLowerInvariant();
+        bool isLocal = host is "127.0.0.1" or "localhost" or "::1" or "0.0.0.0" or "";
+        if (!isLocal) return;            // uzak broker → başlatma
+        if (IsBrokerRunning) return;     // zaten bizim sürecimiz çalışıyor
+        if (BrokerService.FindMosquitto() is null) return; // kurulu değil → AutoConnect yine de dener
+        try
+        {
+            await _broker.StartAsync();  // zaten çalışıyorsa port dolu → false döner, yoksayılır
+            await Task.Delay(600);       // mosquitto ayağa kalksın
+        }
+        catch { /* başlatılamazsa AutoConnect zaten hata mesajı verir */ }
     }
 
     private async Task AutoConnectBrokerAsync()
@@ -460,6 +632,7 @@ public partial class LiveViewModel : BaseViewModel
     }
 
     private IDispatcherTimer? _gamepadUiTimer;
+    private int _diagTickCounter;   // sürekli teşhis: 100ms tick sayacı (5 = ~500ms)
 
     private void StartClock()
     {
@@ -475,6 +648,7 @@ public partial class LiveViewModel : BaseViewModel
             NowDisplay = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss");
             if (_streamStartedAt is DateTime t)
                 ElapsedDisplay = (DateTime.Now - t).ToString(@"hh\:mm\:ss");
+            RefreshPeripheralStatus();
         };
         _elapsedTimer.Start();
 
@@ -483,9 +657,36 @@ public partial class LiveViewModel : BaseViewModel
         _gamepadUiTimer.Interval = TimeSpan.FromMilliseconds(100);
         _gamepadUiTimer.Tick += (_, _) =>
         {
-            if (!IsGamepadActive) return;
+            // Sürekli teşhis: 100 ms timer'ın her 5. tick'i = ~500 ms → robot/diag · pano/diag yayınla.
+            if (IsRobotDiagPolling || IsPanoDiagPolling)
+            {
+                if (++_diagTickCounter >= 5)
+                {
+                    _diagTickCounter = 0;
+                    if (IsRobotDiagPolling) _ = RequestDiagnosticsAsync("robot/diag", "Robot");
+                    if (IsPanoDiagPolling)  _ = RequestDiagnosticsAsync("pano/diag", "Pano");
+                }
+            }
+
+            GamepadDiag = _gamepad.SlotSummary;   // XInput slot teşhisi (her tick)
             var s = _gamepad.CurrentState;
-            if (!s.IsConnected) return;
+
+            // Canlı bağlantı durumunu yansıt (ConnectionChanged event'i kaçsa bile dot doğru olsun)
+            if (IsGamepadConnected != s.IsConnected)
+            {
+                IsGamepadConnected = s.IsConnected;
+                GamepadStatusText = s.IsConnected
+                    ? (IsGamepadActive ? "🎮 Joystick: Aktif" : "🎮 Joystick: Bağlı (kapalı)")
+                    : "🎮 Joystick: Yok";
+            }
+
+            if (!s.IsConnected)
+            {
+                // Bağlı değil → değerleri sıfırla (eski veri ekranda kalmasın)
+                GamepadLX = GamepadLY = GamepadRX = GamepadRY = GamepadLT = GamepadRT = 0f;
+                GamepadButtons = "—";
+                return;
+            }
 
             GamepadLX = s.LeftStickX;
             GamepadLY = s.LeftStickY;

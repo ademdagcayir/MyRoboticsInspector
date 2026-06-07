@@ -192,35 +192,44 @@ public class MqttRobotClient : IRobotProtocol
         await _client.SubscribeAsync(topic, MqttQualityOfServiceLevel.AtLeastOnce, ct);
     }
 
+    /// <summary>
+    /// RobotCommand'i MyRoboticsFirmware bare-topic protokolüne çevirip yayınlar.
+    /// <para>Firmware sürüşü <b>bang-bang + ters işaret</b>tir (robot/yuruyus_ileri_geri.ino):
+    /// İLERİ = forward_backward <b>-100</b> (negatif!), GERİ = <b>+100</b>; SAĞ = left_right
+    /// <b>-100</b>, SOL = <b>+100</b> ve dönüş için forward_backward=0 şart. Bu yüzden dönüş
+    /// komutundan önce fb=0 yayınlanır. JSON yok — firmware atoi() okur.</para>
+    /// </summary>
     public async Task SendAsync(RobotCommand command, CancellationToken ct = default)
     {
         if (!_client.IsConnected) throw new InvalidOperationException("Broker'a bağlı değil.");
 
-        var payload = JsonSerializer.SerializeToUtf8Bytes(new
+        switch (command.Type)
         {
-            cmd = command.Type.ToString(),
-            value = command.Value,
-            payload = command.Payload,
-            ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-        });
-
-        var msg = new MqttApplicationMessageBuilder()
-            .WithTopic(_cmdTopic)
-            .WithPayload(payload)
-            .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
-            .Build();
-
-        var payloadStr = Encoding.UTF8.GetString(payload);
-        try
-        {
-            await _client.PublishAsync(msg, ct);
-            Log(MqttLogDirection.TX, _cmdTopic, payloadStr);
-        }
-        catch (Exception ex)
-        {
-            ErrorOccurred?.Invoke(this, $"Komut yayınlanamadı: {ex.Message}");
-            Log(MqttLogDirection.Error, _cmdTopic, ex.Message);
-            throw;
+            // Sürüş — firmware bang-bang: tam değer (±100), işaret ters.
+            case RobotCommandType.MoveForward:  await PublishRawAsync(FirmwareTopics.ForwardBackward, "-100", ct); break;
+            case RobotCommandType.MoveBackward: await PublishRawAsync(FirmwareTopics.ForwardBackward, "100",  ct); break;
+            case RobotCommandType.TurnRight:    // dönüş için fb=0 olmalı
+                await PublishRawAsync(FirmwareTopics.ForwardBackward, "0", ct);
+                await PublishRawAsync(FirmwareTopics.LeftRight, "-100", ct);
+                break;
+            case RobotCommandType.TurnLeft:
+                await PublishRawAsync(FirmwareTopics.ForwardBackward, "0", ct);
+                await PublishRawAsync(FirmwareTopics.LeftRight, "100", ct);
+                break;
+            case RobotCommandType.Stop:
+                await PublishRawAsync(FirmwareTopics.ForwardBackward, "0", ct);
+                await PublishRawAsync(FirmwareTopics.LeftRight, "0", ct);
+                await PublishRawAsync(FirmwareTopics.Brake, "1", ct);
+                break;
+            // Işık — NOT: mevcut firmware joystick/led'i kullanmıyor (ışık A2 basınca göre otomatik).
+            // Yine de gönderiyoruz; firmware güncellenince etkili olur.
+            case RobotCommandType.LightOn:         await PublishRawAsync(FirmwareTopics.Led, "1", ct); break;
+            case RobotCommandType.LightOff:        await PublishRawAsync(FirmwareTopics.Led, "0", ct); break;
+            case RobotCommandType.LightBrightness: await PublishRawAsync(FirmwareTopics.Led, ((int)Math.Round(command.Value ?? 0f)).ToString(), ct); break;
+            // Kamera kafası — firmware eşiği |değer| ≥ 35.
+            case RobotCommandType.CameraPan:       await PublishRawAsync(FirmwareTopics.Head360CwCcw, ((int)Math.Round(command.Value ?? 0f)).ToString(), ct); break;
+            case RobotCommandType.CameraTilt:      await PublishRawAsync(FirmwareTopics.Head180UpDown, ((int)Math.Round(command.Value ?? 0f)).ToString(), ct); break;
+            default: break; // CameraZoom / Custom — firmware'de karşılığı yok
         }
     }
 
