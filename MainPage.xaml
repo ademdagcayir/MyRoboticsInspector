@@ -414,6 +414,7 @@
                       </Border>
 
                       <CollectionView Grid.Row="2" ItemsSource="{Binding MqttLog}"
+                                      ItemsUpdatingScrollMode="KeepItemsInView"
                                       VerticalScrollBarVisibility="Always">
                           <CollectionView.EmptyView>
                               <Label Text="Henüz mesaj yok — broker'a bağlan" TextColor="#8A8F9C"
@@ -448,6 +449,7 @@
                                   Padding="10,4" Command="{Binding ClearDeviceLogCommand}" />
                       </Grid>
                       <CollectionView Grid.Row="1" ItemsSource="{Binding DeviceLog}"
+                                      ItemsUpdatingScrollMode="KeepItemsInView"
                                       VerticalScrollBarVisibility="Always">
                           <CollectionView.EmptyView>
                               <Label Text="Cihaz logu yok — Robot/Pano Teşhis'e bas" TextColor="#8A8F9C"
@@ -705,6 +707,7 @@
                                     Padding="0" IsVisible="{Binding ShowDeviceConsole}">
                                 <CollectionView ItemsSource="{Binding DeviceLog}"
                                                 HeightRequest="240"
+                                                ItemsUpdatingScrollMode="KeepItemsInView"
                                                 VerticalScrollBarVisibility="Always">
                                     <CollectionView.EmptyView>
                                         <Label Text="Cihaz logu yok — robot/pano bağlanınca akmaya başlar"
@@ -785,6 +788,7 @@
                                     Padding="0" IsVisible="{Binding ShowMqttLog}">
                                 <CollectionView ItemsSource="{Binding MqttLog}"
                                                 HeightRequest="260"
+                                                ItemsUpdatingScrollMode="KeepItemsInView"
                                                 VerticalScrollBarVisibility="Always">
                                     <CollectionView.EmptyView>
                                         <Label Text="Henüz mesaj yok — broker'a bağlan"

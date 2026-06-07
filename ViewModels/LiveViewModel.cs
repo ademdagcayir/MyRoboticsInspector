@@ -632,7 +632,8 @@ public partial class LiveViewModel : BaseViewModel
     }
 
     private IDispatcherTimer? _gamepadUiTimer;
-    private int _diagTickCounter;   // sürekli teşhis: 100ms tick sayacı (5 = ~500ms)
+    private int _diagTickCounter;          // sürekli teşhis: 100ms tick sayacı
+    private const int DiagTicksPerPoll = 10; // 100ms × 10 = 1 sn (titremeyi azaltmak için)
 
     private void StartClock()
     {
@@ -657,10 +658,13 @@ public partial class LiveViewModel : BaseViewModel
         _gamepadUiTimer.Interval = TimeSpan.FromMilliseconds(100);
         _gamepadUiTimer.Tick += (_, _) =>
         {
-            // Sürekli teşhis: 100 ms timer'ın her 5. tick'i = ~500 ms → robot/diag · pano/diag yayınla.
+            // Sürekli teşhis: 100 ms timer'ın her N. tick'inde robot/diag · pano/diag yayınla.
+            // 1000 ms seçildi (eskiden 500 idi) — 12 satırlık rapor 500 ms'de listeyi taşırıp
+            // ekranı titretiyordu. Canlılık zaten heartbeat (alive) ile sağlanıyor; teşhis
+            // yalnızca komut yankısını izlemek için.
             if (IsRobotDiagPolling || IsPanoDiagPolling)
             {
-                if (++_diagTickCounter >= 5)
+                if (++_diagTickCounter >= DiagTicksPerPoll)
                 {
                     _diagTickCounter = 0;
                     if (IsRobotDiagPolling) _ = RequestDiagnosticsAsync("robot/diag", "Robot");
