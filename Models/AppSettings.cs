@@ -91,9 +91,12 @@ public class AppSettings
     public bool GamepadAutoStart { get; set; } = true;
 
     // ----- Otomatik güncelleme (Velopack) -----
-    /// <summary>Güncelleme manifesti (RELEASES + *.nupkg) bu URL'den çekilir.</summary>
+    /// <summary>
+    /// Güncelleme kaynağı. GitHub repo URL'i ise Velopack GithubSource (public releases) kullanır;
+    /// release asset'lerinden (RELEASES + *.nupkg) otomatik güncelleme çeker.
+    /// </summary>
     [MaxLength(500)]
-    public string UpdateServerUrl { get; set; } = "https://myrobotics.com.tr/updates/inspector/";
+    public string UpdateServerUrl { get; set; } = "https://github.com/ademdagcayir/MyRoboticsInspector";
 
     /// <summary>Uygulama açılınca arka planda güncelleme var mı kontrol edilsin mi.</summary>
     public bool AutoCheckUpdates { get; set; } = true;

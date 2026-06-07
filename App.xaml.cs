@@ -36,10 +36,46 @@ public partial class App : Application
         catch { }
     }
 
+    /// <summary>GitHub release kaynağı — eski/boş ayar URL'i buna yönlendirilir.</summary>
+    private const string DefaultUpdateRepo = "https://github.com/ademdagcayir/MyRoboticsInspector";
+
     protected override Window CreateWindow(IActivationState? activationState)
     {
         _window = new Window { Page = BuildRootPage() };
+        // Açılışta sessiz otomatik güncelleme (varsa indir + uygula + yeniden başlat)
+        _ = TryStartupAutoUpdateAsync();
         return _window;
+    }
+
+    /// <summary>
+    /// Açılışta sessizce güncelleme kontrol eder; varsa indirip uygular ve uygulamayı
+    /// yeni sürümle otomatik yeniden başlatır (kullanıcıya sormaz). ChequeApp benzeri akış.
+    /// </summary>
+    private async Task TryStartupAutoUpdateAsync()
+    {
+        try
+        {
+            var updates = _services.GetService<UpdateService>();
+            var db      = _services.GetService<DatabaseService>();
+            if (updates is null || db is null || !updates.IsSupported) return;
+
+            var settings = await db.GetSettingsAsync();
+            if (!settings.AutoCheckUpdates) return;
+
+            // Eski (myrobotics.com.tr) veya boş URL → GitHub release kaynağına yönlendir
+            var url = settings.UpdateServerUrl;
+            if (string.IsNullOrWhiteSpace(url) || url.Contains("myrobotics.com.tr", StringComparison.OrdinalIgnoreCase))
+                url = DefaultUpdateRepo;
+
+            // Pencere görünür olsun diye kısa bekleme, sonra sessiz uygula+restart
+            await Task.Delay(2500);
+            await updates.ApplyAndRestartAsync(url);
+            // Güncelleme yoksa buradan döner; varsa uygulama zaten yeniden başlamıştır.
+        }
+        catch (Exception ex)
+        {
+            LogCrash("StartupAutoUpdate", ex);
+        }
     }
 
     private Page BuildRootPage()
