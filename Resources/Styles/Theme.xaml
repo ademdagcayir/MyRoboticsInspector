@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <ResourceDictionary xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+                    x:Class="MyRoboticsInspector.Resources.Styles.Theme">
 
     <!--
     ╔══════════════════════════════════════════════════════════════════════╗
@@ -12,46 +13,17 @@
     ╚══════════════════════════════════════════════════════════════════════╝
     -->
 
-    <!-- ════════ SURFACE HIERARCHY (hafif mavi alt-ton ile derinlik) ════════ -->
-    <Color x:Key="ColorPageBg">#0A0B0F</Color>          <!-- en derin zemin -->
-    <Color x:Key="ColorSurface">#15161C</Color>          <!-- kart / konteyner -->
-    <Color x:Key="ColorSurfaceHigh">#1F2128</Color>      <!-- yükseltilmiş yüzey, input -->
-    <Color x:Key="ColorSurfaceSubtle">#101117</Color>    <!-- ince zemin -->
-    <Color x:Key="ColorSurfaceGlass">#CC181A22</Color>   <!-- yarı saydam cam yüzey -->
-
-    <!-- Mica'nın görüneceği yarı saydam flyout zemini (yoksa koyu kalır) -->
-    <Color x:Key="ColorFlyoutBg">#D9111219</Color>
-
-    <!-- ════════ BORDERS & DIVIDERS ════════ -->
-    <Color x:Key="ColorBorder">#2A2C36</Color>
-    <Color x:Key="ColorBorderStrong">#3A3D49</Color>
-    <Color x:Key="ColorBorderSubtle">#20222B</Color>
-
-    <!-- ════════ TEXT ════════ -->
-    <Color x:Key="ColorTextPrimary">#FFFFFF</Color>
-    <Color x:Key="ColorTextSecondary">#AEB1BC</Color>
-    <Color x:Key="ColorTextTertiary">#7E828F</Color>
-
-    <!-- ════════ BRAND & SEMANTIC ════════ -->
-    <Color x:Key="ColorAccent">#0A84FF</Color>           <!-- elektrik mavisi -->
-    <Color x:Key="ColorAccentSoft">#2A9BFF</Color>
-    <Color x:Key="ColorAccentMuted">#1E3A5F</Color>       <!-- vurgu tint (seçili zemin) -->
-    <Color x:Key="ColorIndigo">#5E5CE6</Color>
-    <Color x:Key="ColorViolet">#BF5AF2</Color>
-    <Color x:Key="ColorSuccess">#30D158</Color>
-    <Color x:Key="ColorSuccessMuted">#16321F</Color>
-    <Color x:Key="ColorWarning">#FF9F0A</Color>
-    <Color x:Key="ColorDanger">#FF453A</Color>
-    <Color x:Key="ColorRecord">#FF3B30</Color>
-    <Color x:Key="ColorHighlight">#FFD60A</Color>
-    <Color x:Key="ColorCyan">#64D2FF</Color>
+    <!-- ════════ RENK PALETİ ════════ -->
+    <!-- Renk anahtarları artık ColorsDark.xaml / ColorsLight.xaml içinde;
+         ThemeService çalışma anında hangi paletin yükleneceğini seçer.
+         Buradaki fırça/gradyan/stiller bu anahtarları StaticResource ile tüketir. -->
 
     <!-- ════════ BRUSHES (Shape uyumlu) ════════ -->
-    <SolidColorBrush x:Key="BrushPageBg" Color="{StaticResource ColorPageBg}" />
-    <SolidColorBrush x:Key="BrushSurface" Color="{StaticResource ColorSurface}" />
-    <SolidColorBrush x:Key="BrushSurfaceHigh" Color="{StaticResource ColorSurfaceHigh}" />
-    <SolidColorBrush x:Key="BrushBorder" Color="{StaticResource ColorBorder}" />
-    <SolidColorBrush x:Key="BrushAccent" Color="{StaticResource ColorAccent}" />
+    <SolidColorBrush x:Key="BrushPageBg" Color="{DynamicResource ColorPageBg}" />
+    <SolidColorBrush x:Key="BrushSurface" Color="{DynamicResource ColorSurface}" />
+    <SolidColorBrush x:Key="BrushSurfaceHigh" Color="{DynamicResource ColorSurfaceHigh}" />
+    <SolidColorBrush x:Key="BrushBorder" Color="{DynamicResource ColorBorder}" />
+    <SolidColorBrush x:Key="BrushAccent" Color="{DynamicResource ColorAccent}" />
 
     <!-- ════════ GRADIENTS ════════ -->
     <LinearGradientBrush x:Key="GradientAccent" StartPoint="0,0" EndPoint="0,1">
@@ -75,10 +47,10 @@
         <GradientStop Color="#24B84C" Offset="1" />
     </LinearGradientBrush>
 
-    <!-- Kart tepesine ince ışık vuruşu (derinlik hissi) -->
+    <!-- Kart tepesine ince ışık vuruşu (derinlik hissi) — temaya duyarlı -->
     <LinearGradientBrush x:Key="GradientSurface" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Color="#1C1E26" Offset="0" />
-        <GradientStop Color="#15161C" Offset="1" />
+        <GradientStop Color="{DynamicResource ColorSurfaceHigh}" Offset="0" />
+        <GradientStop Color="{DynamicResource ColorSurface}" Offset="1" />
     </LinearGradientBrush>
 
     <!-- Video tuval zemini -->
@@ -113,7 +85,7 @@
     <!-- ════════════════════════════════════════════════════════════════════ -->
 
     <Style x:Key="CardBorder" TargetType="Border">
-        <Setter Property="Stroke" Value="{StaticResource ColorBorder}" />
+        <Setter Property="Stroke" Value="{DynamicResource ColorBorder}" />
         <Setter Property="StrokeThickness" Value="1" />
         <Setter Property="Background" Value="{StaticResource GradientSurface}" />
         <Setter Property="StrokeShape" Value="RoundRectangle 16" />
@@ -121,15 +93,15 @@
     </Style>
 
     <Style x:Key="CardBorderAccent" TargetType="Border" BasedOn="{StaticResource CardBorder}">
-        <Setter Property="Stroke" Value="{StaticResource ColorSuccess}" />
+        <Setter Property="Stroke" Value="{DynamicResource ColorSuccess}" />
         <Setter Property="StrokeThickness" Value="1.5" />
     </Style>
 
     <!-- Yarı saydam cam kart (Mica üzerinde) -->
     <Style x:Key="GlassCard" TargetType="Border">
-        <Setter Property="Stroke" Value="{StaticResource ColorBorderStrong}" />
+        <Setter Property="Stroke" Value="{DynamicResource ColorBorderStrong}" />
         <Setter Property="StrokeThickness" Value="1" />
-        <Setter Property="Background" Value="{StaticResource ColorSurfaceGlass}" />
+        <Setter Property="Background" Value="{DynamicResource ColorSurfaceGlass}" />
         <Setter Property="StrokeShape" Value="RoundRectangle 16" />
         <Setter Property="Padding" Value="16" />
     </Style>
@@ -137,7 +109,7 @@
     <!-- İnce ayırıcı -->
     <Style x:Key="Divider" TargetType="BoxView">
         <Setter Property="HeightRequest" Value="1" />
-        <Setter Property="Color" Value="{StaticResource ColorBorderSubtle}" />
+        <Setter Property="Color" Value="{DynamicResource ColorBorderSubtle}" />
     </Style>
 
     <!-- ════════════════════════════════════════════════════════════════════ -->
@@ -147,25 +119,25 @@
     <Style x:Key="Display" TargetType="Label">
         <Setter Property="FontSize" Value="30" />
         <Setter Property="FontAttributes" Value="Bold" />
-        <Setter Property="TextColor" Value="{StaticResource ColorTextPrimary}" />
+        <Setter Property="TextColor" Value="{DynamicResource ColorTextPrimary}" />
     </Style>
 
     <Style x:Key="Title" TargetType="Label">
         <Setter Property="FontSize" Value="22" />
         <Setter Property="FontAttributes" Value="Bold" />
-        <Setter Property="TextColor" Value="{StaticResource ColorTextPrimary}" />
+        <Setter Property="TextColor" Value="{DynamicResource ColorTextPrimary}" />
     </Style>
 
     <Style x:Key="Subtitle" TargetType="Label">
         <Setter Property="FontSize" Value="15" />
-        <Setter Property="TextColor" Value="{StaticResource ColorTextSecondary}" />
+        <Setter Property="TextColor" Value="{DynamicResource ColorTextSecondary}" />
     </Style>
 
     <!-- Section title (küçük, harf aralıklı üst başlık) -->
     <Style x:Key="SectionTitle" TargetType="Label">
         <Setter Property="FontSize" Value="11" />
         <Setter Property="FontAttributes" Value="Bold" />
-        <Setter Property="TextColor" Value="{StaticResource ColorTextTertiary}" />
+        <Setter Property="TextColor" Value="{DynamicResource ColorTextTertiary}" />
         <Setter Property="CharacterSpacing" Value="1.4" />
         <Setter Property="Margin" Value="0,0,0,4" />
     </Style>
@@ -174,30 +146,30 @@
     <Style x:Key="Overline" TargetType="Label">
         <Setter Property="FontSize" Value="9" />
         <Setter Property="FontAttributes" Value="Bold" />
-        <Setter Property="TextColor" Value="{StaticResource ColorTextTertiary}" />
+        <Setter Property="TextColor" Value="{DynamicResource ColorTextTertiary}" />
         <Setter Property="CharacterSpacing" Value="1.6" />
     </Style>
 
     <Style x:Key="CardTitle" TargetType="Label">
         <Setter Property="FontSize" Value="16" />
         <Setter Property="FontAttributes" Value="Bold" />
-        <Setter Property="TextColor" Value="{StaticResource ColorTextPrimary}" />
+        <Setter Property="TextColor" Value="{DynamicResource ColorTextPrimary}" />
     </Style>
 
     <Style x:Key="BodyText" TargetType="Label">
         <Setter Property="FontSize" Value="13" />
-        <Setter Property="TextColor" Value="{StaticResource ColorTextPrimary}" />
+        <Setter Property="TextColor" Value="{DynamicResource ColorTextPrimary}" />
     </Style>
 
     <Style x:Key="Caption" TargetType="Label">
         <Setter Property="FontSize" Value="11" />
-        <Setter Property="TextColor" Value="{StaticResource ColorTextSecondary}" />
+        <Setter Property="TextColor" Value="{DynamicResource ColorTextSecondary}" />
     </Style>
 
     <!-- İkon (Segoe Fluent / MDL2 glyph) etiketi. Windows sistem fontu — kayıt gerekmez. -->
     <Style x:Key="Glyph" TargetType="Label">
         <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
-        <Setter Property="TextColor" Value="{StaticResource ColorTextPrimary}" />
+        <Setter Property="TextColor" Value="{DynamicResource ColorTextPrimary}" />
         <Setter Property="FontSize" Value="16" />
         <Setter Property="HorizontalOptions" Value="Center" />
         <Setter Property="VerticalOptions" Value="Center" />
@@ -208,7 +180,7 @@
     <!-- ════════════════════════════════════════════════════════════════════ -->
 
     <Style x:Key="PrimaryButton" TargetType="Button">
-        <Setter Property="BackgroundColor" Value="{StaticResource ColorAccent}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource ColorAccent}" />
         <Setter Property="TextColor" Value="White" />
         <Setter Property="CornerRadius" Value="12" />
         <Setter Property="HeightRequest" Value="46" />
@@ -247,24 +219,24 @@
     </Style>
 
     <Style x:Key="SuccessButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
-        <Setter Property="BackgroundColor" Value="{StaticResource ColorSuccess}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource ColorSuccess}" />
         <Setter Property="TextColor" Value="#06210E" />
     </Style>
 
     <Style x:Key="WarningButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
-        <Setter Property="BackgroundColor" Value="{StaticResource ColorWarning}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource ColorWarning}" />
         <Setter Property="TextColor" Value="#3A2400" />
     </Style>
 
     <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
-        <Setter Property="BackgroundColor" Value="{StaticResource ColorDanger}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource ColorDanger}" />
         <Setter Property="TextColor" Value="White" />
     </Style>
 
     <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
-        <Setter Property="BackgroundColor" Value="{StaticResource ColorSurfaceHigh}" />
-        <Setter Property="TextColor" Value="{StaticResource ColorTextPrimary}" />
-        <Setter Property="BorderColor" Value="{StaticResource ColorBorderStrong}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource ColorSurfaceHigh}" />
+        <Setter Property="TextColor" Value="{DynamicResource ColorTextPrimary}" />
+        <Setter Property="BorderColor" Value="{DynamicResource ColorBorderStrong}" />
         <Setter Property="BorderWidth" Value="1" />
         <Setter Property="HeightRequest" Value="42" />
         <Setter Property="FontSize" Value="13" />
@@ -273,7 +245,7 @@
 
     <Style x:Key="QuietButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
         <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="TextColor" Value="{StaticResource ColorTextSecondary}" />
+        <Setter Property="TextColor" Value="{DynamicResource ColorTextSecondary}" />
         <Setter Property="CornerRadius" Value="8" />
         <Setter Property="Padding" Value="8,4" />
         <Setter Property="HeightRequest" Value="36" />
@@ -316,9 +288,9 @@
     <!-- Yuvarlak ikon buton (40x40) -->
     <Style x:Key="IconButton" TargetType="Button">
         <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
-        <Setter Property="BackgroundColor" Value="{StaticResource ColorSurfaceHigh}" />
-        <Setter Property="TextColor" Value="{StaticResource ColorTextPrimary}" />
-        <Setter Property="BorderColor" Value="{StaticResource ColorBorderStrong}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource ColorSurfaceHigh}" />
+        <Setter Property="TextColor" Value="{DynamicResource ColorTextPrimary}" />
+        <Setter Property="BorderColor" Value="{DynamicResource ColorBorderStrong}" />
         <Setter Property="BorderWidth" Value="1" />
         <Setter Property="CornerRadius" Value="10" />
         <Setter Property="WidthRequest" Value="42" />
@@ -353,23 +325,23 @@
     <!-- ════════════════════════════════════════════════════════════════════ -->
 
     <Style x:Key="Chip" TargetType="Border">
-        <Setter Property="Stroke" Value="{StaticResource ColorBorderStrong}" />
+        <Setter Property="Stroke" Value="{DynamicResource ColorBorderStrong}" />
         <Setter Property="StrokeThickness" Value="1" />
         <Setter Property="StrokeShape" Value="RoundRectangle 20" />
-        <Setter Property="Background" Value="{StaticResource ColorSurfaceHigh}" />
+        <Setter Property="Background" Value="{DynamicResource ColorSurfaceHigh}" />
         <Setter Property="Padding" Value="12,6" />
     </Style>
 
     <Style x:Key="ChipAccent" TargetType="Border" BasedOn="{StaticResource Chip}">
-        <Setter Property="Stroke" Value="{StaticResource ColorAccent}" />
-        <Setter Property="Background" Value="{StaticResource ColorAccentMuted}" />
+        <Setter Property="Stroke" Value="{DynamicResource ColorAccent}" />
+        <Setter Property="Background" Value="{DynamicResource ColorAccentMuted}" />
     </Style>
 
     <!-- Küçük durum rozeti (pill) -->
     <Style x:Key="Badge" TargetType="Border">
         <Setter Property="StrokeThickness" Value="0" />
         <Setter Property="StrokeShape" Value="RoundRectangle 10" />
-        <Setter Property="Background" Value="{StaticResource ColorAccentMuted}" />
+        <Setter Property="Background" Value="{DynamicResource ColorAccentMuted}" />
         <Setter Property="Padding" Value="8,3" />
         <Setter Property="HorizontalOptions" Value="Start" />
     </Style>
@@ -379,37 +351,37 @@
     <!-- ════════════════════════════════════════════════════════════════════ -->
 
     <Style TargetType="Entry">
-        <Setter Property="BackgroundColor" Value="{StaticResource ColorSurfaceHigh}" />
-        <Setter Property="TextColor" Value="{StaticResource ColorTextPrimary}" />
-        <Setter Property="PlaceholderColor" Value="{StaticResource ColorTextTertiary}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource ColorSurfaceHigh}" />
+        <Setter Property="TextColor" Value="{DynamicResource ColorTextPrimary}" />
+        <Setter Property="PlaceholderColor" Value="{DynamicResource ColorTextTertiary}" />
         <Setter Property="FontSize" Value="13" />
         <Setter Property="HeightRequest" Value="42" />
     </Style>
 
     <Style TargetType="Picker">
-        <Setter Property="BackgroundColor" Value="{StaticResource ColorSurfaceHigh}" />
-        <Setter Property="TextColor" Value="{StaticResource ColorTextPrimary}" />
-        <Setter Property="TitleColor" Value="{StaticResource ColorTextTertiary}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource ColorSurfaceHigh}" />
+        <Setter Property="TextColor" Value="{DynamicResource ColorTextPrimary}" />
+        <Setter Property="TitleColor" Value="{DynamicResource ColorTextTertiary}" />
         <Setter Property="FontSize" Value="13" />
         <Setter Property="HeightRequest" Value="42" />
     </Style>
 
     <Style TargetType="Editor">
-        <Setter Property="BackgroundColor" Value="{StaticResource ColorSurfaceHigh}" />
-        <Setter Property="TextColor" Value="{StaticResource ColorTextPrimary}" />
-        <Setter Property="PlaceholderColor" Value="{StaticResource ColorTextTertiary}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource ColorSurfaceHigh}" />
+        <Setter Property="TextColor" Value="{DynamicResource ColorTextPrimary}" />
+        <Setter Property="PlaceholderColor" Value="{DynamicResource ColorTextTertiary}" />
         <Setter Property="FontSize" Value="13" />
     </Style>
 
     <Style TargetType="DatePicker">
-        <Setter Property="BackgroundColor" Value="{StaticResource ColorSurfaceHigh}" />
-        <Setter Property="TextColor" Value="{StaticResource ColorTextPrimary}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource ColorSurfaceHigh}" />
+        <Setter Property="TextColor" Value="{DynamicResource ColorTextPrimary}" />
         <Setter Property="FontSize" Value="13" />
     </Style>
 
     <Style TargetType="TimePicker">
-        <Setter Property="BackgroundColor" Value="{StaticResource ColorSurfaceHigh}" />
-        <Setter Property="TextColor" Value="{StaticResource ColorTextPrimary}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource ColorSurfaceHigh}" />
+        <Setter Property="TextColor" Value="{DynamicResource ColorTextPrimary}" />
         <Setter Property="FontSize" Value="13" />
     </Style>
 

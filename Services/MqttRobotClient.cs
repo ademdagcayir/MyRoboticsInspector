@@ -224,6 +224,31 @@ public class MqttRobotClient : IRobotProtocol
         }
     }
 
+    /// <summary>
+    /// Belirli bir topic'e ham metin yayınlar (cmd dışı topic'ler için — örn. teşhis isteği
+    /// robot/diag, pano/diag). SendAsync sadece komut topic'ine yazar; bu genel amaçlıdır.
+    /// </summary>
+    public async Task PublishRawAsync(string topic, string payload, CancellationToken ct = default)
+    {
+        if (!_client.IsConnected) throw new InvalidOperationException("Broker'a bağlı değil.");
+        var msg = new MqttApplicationMessageBuilder()
+            .WithTopic(topic)
+            .WithPayload(payload)
+            .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
+            .Build();
+        try
+        {
+            await _client.PublishAsync(msg, ct);
+            Log(MqttLogDirection.TX, topic, payload);
+        }
+        catch (Exception ex)
+        {
+            ErrorOccurred?.Invoke(this, $"Yayın hatası ({topic}): {ex.Message}");
+            Log(MqttLogDirection.Error, topic, ex.Message);
+            throw;
+        }
+    }
+
     private void Log(MqttLogDirection dir, string topic, string payload)
         => TrafficLogged?.Invoke(this, new MqttLogEntry(DateTime.Now, dir, topic, payload));
 

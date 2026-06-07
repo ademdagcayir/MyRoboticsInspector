@@ -31,7 +31,7 @@
 
             <!-- Durum mesajı -->
             <Label Grid.Column="2" Text="{Binding StatusMessage}"
-                   FontSize="12" TextColor="#5ccf8a"
+                   FontSize="12" TextColor="{StaticResource ColorSuccess}"
                    VerticalOptions="Center" MaximumWidthRequest="300"
                    LineBreakMode="TailTruncation"
                    IsVisible="{Binding StatusMessage, Converter={StaticResource StringNotEmpty}}" />
@@ -73,8 +73,9 @@
                                     <Entry Text="{Binding EditingChannel.ChannelCode}" Placeholder="YK3697A" />
                                 </VerticalStackLayout>
                                 <VerticalStackLayout Grid.Column="2">
-                                    <Label Text="Proje Türü" Style="{StaticResource Caption}" />
-                                    <Picker ItemsSource="{Binding ProjectTypeOptions}"
+                                    <Label Text="Proje Türü *" Style="{StaticResource Caption}" />
+                                    <Picker Title="Atık Su / Yağmur Suyu…"
+                                            ItemsSource="{Binding ProjectTypeOptions}"
                                             SelectedItem="{Binding SelectedProjectType}"
                                             ItemDisplayBinding="{Binding Label}" />
                                 </VerticalStackLayout>
@@ -109,7 +110,7 @@
                             <Label Text="BACALAR" Style="{StaticResource SectionTitle}" />
                             <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
                                 <VerticalStackLayout Grid.Column="0">
-                                    <Label Text="Giriş Bacası Kodu" Style="{StaticResource Caption}" />
+                                    <Label Text="Giriş Bacası Kodu *" Style="{StaticResource Caption}" />
                                     <Entry Text="{Binding EditingChannel.EntryManhole}" Placeholder="YK3685A" />
                                 </VerticalStackLayout>
                                 <VerticalStackLayout Grid.Column="1">
@@ -121,7 +122,7 @@
                                    TextColor="{StaticResource ColorTextTertiary}" />
                             <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
                                 <VerticalStackLayout Grid.Column="0">
-                                    <Label Text="Çıkış Bacası Kodu" Style="{StaticResource Caption}" />
+                                    <Label Text="Çıkış Bacası Kodu *" Style="{StaticResource Caption}" />
                                     <Entry Text="{Binding EditingChannel.ExitManhole}" Placeholder="YK657087A" />
                                 </VerticalStackLayout>
                                 <VerticalStackLayout Grid.Column="1">
@@ -144,7 +145,7 @@
                                             ItemDisplayBinding="{Binding Label}" />
                                 </VerticalStackLayout>
                                 <VerticalStackLayout Grid.Column="1">
-                                    <Label Text="Genişlik (mm)" Style="{StaticResource Caption}" />
+                                    <Label Text="Çap / Genişlik (mm) *" Style="{StaticResource Caption}" />
                                     <Entry Text="{Binding EditingChannel.PipeWidthMm}" Keyboard="Numeric" Placeholder="300" />
                                 </VerticalStackLayout>
                                 <VerticalStackLayout Grid.Column="2">
@@ -176,8 +177,16 @@
                             <Label Text="KONUM" Style="{StaticResource SectionTitle}" />
                             <Grid ColumnDefinitions="2*,*" ColumnSpacing="10">
                                 <VerticalStackLayout Grid.Column="0">
-                                    <Label Text="Sokak" Style="{StaticResource Caption}" />
-                                    <Entry Text="{Binding EditingChannel.Street}" Placeholder="CANAN SK" />
+                                    <Label Text="Sokak *" Style="{StaticResource Caption}" />
+                                    <!-- Kayıtlı sokak seç (varsa) -->
+                                    <Picker Title="Kayıtlı sokak seç…"
+                                            ItemsSource="{Binding KnownStreets}"
+                                            SelectedItem="{Binding SelectedStreet}"
+                                            IsVisible="{Binding KnownStreets.Count, Converter={StaticResource IntToBool}}"
+                                            Margin="0,0,0,4" />
+                                    <!-- veya yeni sokak yaz (klasör adı bu olur) -->
+                                    <Entry Text="{Binding EditingChannel.Street}"
+                                           Placeholder="CANAN SK (yeni sokak için yazın)" />
                                 </VerticalStackLayout>
                                 <VerticalStackLayout Grid.Column="1">
                                     <Label Text="Pafta" Style="{StaticResource Caption}" />
@@ -193,7 +202,7 @@
                             <Label Text="GÖRÜNTÜLEME" Style="{StaticResource SectionTitle}" />
                             <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
                                 <VerticalStackLayout Grid.Column="0">
-                                    <Label Text="Kontrol Yönü" Style="{StaticResource Caption}" />
+                                    <Label Text="Kontrol Yönü (Akış) *" Style="{StaticResource Caption}" />
                                     <Picker ItemsSource="{Binding FlowOptions}"
                                             SelectedItem="{Binding SelectedFlow}"
                                             ItemDisplayBinding="{Binding Label}" />
@@ -259,7 +268,7 @@
                             <!-- Yeni kanal butonu -->
                             <Button Grid.Column="1" Text="+ Kanal"
                                     FontSize="11" FontAttributes="Bold"
-                                    BackgroundColor="#1a3d2b" TextColor="#5ccf8a"
+                                    BackgroundColor="{StaticResource ColorSuccessMuted}" TextColor="{StaticResource ColorSuccess}"
                                     CornerRadius="5" HeightRequest="26" Padding="8,0"
                                     Command="{Binding SaveCommand}"
                                     ToolTipProperties.Text="Mevcut kanalı kaydet ve yeni kanal ekle" />

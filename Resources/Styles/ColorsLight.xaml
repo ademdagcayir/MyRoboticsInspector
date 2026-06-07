@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+    AÇIK PALET — "Daylight" (Apple-vari, yüksek okunaklılık).
+    ColorsDark.xaml ile aynı anahtarlar; ThemeService çalışma anında bunu yükler.
+    Theme.xaml renkleri DynamicResource ile tükettiğinden palet değişimi canlı yansır.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+                    x:Class="MyRoboticsInspector.Resources.Styles.ColorsLight">
+
+    <!-- SURFACE — Apple "system gray" zemin + saf beyaz kartlar -->
+    <Color x:Key="ColorPageBg">#F5F5F7</Color>
+    <Color x:Key="ColorSurface">#FFFFFF</Color>
+    <Color x:Key="ColorSurfaceHigh">#FBFBFD</Color>
+    <Color x:Key="ColorSurfaceSubtle">#ECECEF</Color>
+    <Color x:Key="ColorSurfaceGlass">#F2FFFFFF</Color>
+    <Color x:Key="ColorFlyoutBg">#F5F5F7</Color>
+
+    <!-- BORDERS — Apple separatör tonları -->
+    <Color x:Key="ColorBorder">#D2D2D7</Color>
+    <Color x:Key="ColorBorderStrong">#C7C7CC</Color>
+    <Color x:Key="ColorBorderSubtle">#E5E5EA</Color>
+
+    <!-- TEXT — near-black etiket + okunaklı griler -->
+    <Color x:Key="ColorTextPrimary">#1D1D1F</Color>
+    <Color x:Key="ColorTextSecondary">#515154</Color>
+    <Color x:Key="ColorTextTertiary">#86868B</Color>
+
+    <!-- BRAND & SEMANTIC — beyaz üstünde okunaklı, canlı tonlar -->
+    <Color x:Key="ColorAccent">#0A84FF</Color>
+    <Color x:Key="ColorAccentSoft">#0071E3</Color>
+    <Color x:Key="ColorAccentMuted">#E5F0FF</Color>
+    <Color x:Key="ColorIndigo">#5E5CE6</Color>
+    <Color x:Key="ColorViolet">#AF52DE</Color>
+    <Color x:Key="ColorSuccess">#248A3D</Color>
+    <Color x:Key="ColorSuccessMuted">#DCF5E4</Color>
+    <Color x:Key="ColorWarning">#B25E00</Color>
+    <Color x:Key="ColorDanger">#D70015</Color>
+    <Color x:Key="ColorRecord">#D70015</Color>
+    <Color x:Key="ColorHighlight">#B8860B</Color>
+    <Color x:Key="ColorCyan">#0A84C0</Color>
+
+</ResourceDictionary>

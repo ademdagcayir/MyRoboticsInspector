@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+    KOYU PALET — "Deep Field" (varsayılan).
+    Theme.xaml'in stilleri bu anahtarları StaticResource ile tüketir.
+    Açık tema için ColorsLight.xaml aynı anahtarları farklı değerlerle sağlar;
+    ThemeService çalışma anında bu sözlüğü değiştirir.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+                    x:Class="MyRoboticsInspector.Resources.Styles.ColorsDark">
+
+    <!-- SURFACE -->
+    <Color x:Key="ColorPageBg">#0A0B0F</Color>
+    <Color x:Key="ColorSurface">#15161C</Color>
+    <Color x:Key="ColorSurfaceHigh">#1F2128</Color>
+    <Color x:Key="ColorSurfaceSubtle">#101117</Color>
+    <Color x:Key="ColorSurfaceGlass">#CC181A22</Color>
+    <Color x:Key="ColorFlyoutBg">#D9111219</Color>
+
+    <!-- BORDERS -->
+    <Color x:Key="ColorBorder">#2A2C36</Color>
+    <Color x:Key="ColorBorderStrong">#3A3D49</Color>
+    <Color x:Key="ColorBorderSubtle">#20222B</Color>
+
+    <!-- TEXT -->
+    <Color x:Key="ColorTextPrimary">#FFFFFF</Color>
+    <Color x:Key="ColorTextSecondary">#AEB1BC</Color>
+    <Color x:Key="ColorTextTertiary">#7E828F</Color>
+
+    <!-- BRAND & SEMANTIC -->
+    <Color x:Key="ColorAccent">#0A84FF</Color>
+    <Color x:Key="ColorAccentSoft">#2A9BFF</Color>
+    <Color x:Key="ColorAccentMuted">#1E3A5F</Color>
+    <Color x:Key="ColorIndigo">#5E5CE6</Color>
+    <Color x:Key="ColorViolet">#BF5AF2</Color>
+    <Color x:Key="ColorSuccess">#30D158</Color>
+    <Color x:Key="ColorSuccessMuted">#16321F</Color>
+    <Color x:Key="ColorWarning">#FF9F0A</Color>
+    <Color x:Key="ColorDanger">#FF453A</Color>
+    <Color x:Key="ColorRecord">#FF3B30</Color>
+    <Color x:Key="ColorHighlight">#FFD60A</Color>
+    <Color x:Key="ColorCyan">#64D2FF</Color>
+
+</ResourceDictionary>

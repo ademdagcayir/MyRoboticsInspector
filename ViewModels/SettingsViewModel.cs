@@ -49,6 +49,34 @@ public partial class SettingsViewModel : BaseViewModel
     /// <summary>Kayıt encoder seçenekleri (Picker kaynağı).</summary>
     public string[] RecordingEncoders { get; } = { "auto", "nvenc", "qsv", "libx264" };
 
+    /// <summary>Tema seçenekleri (Picker kaynağı).</summary>
+    public string[] ThemeOptions { get; } = { "Koyu", "Açık", "Sistem" };
+
+    [ObservableProperty] private string selectedTheme = "Koyu";
+    private bool _suppressThemeApply;
+
+    private static string ThemePrefToDisplay(string p) => p switch
+    {
+        ThemeService.Light  => "Açık",
+        ThemeService.System => "Sistem",
+        _                   => "Koyu"
+    };
+
+    private static string ThemeDisplayToPref(string d) => d switch
+    {
+        "Açık"   => ThemeService.Light,
+        "Sistem" => ThemeService.System,
+        _        => ThemeService.Dark
+    };
+
+    partial void OnSelectedThemeChanged(string value)
+    {
+        if (_suppressThemeApply || string.IsNullOrEmpty(value)) return;
+        var pref = ThemeDisplayToPref(value);
+        if (pref == ThemeService.CurrentPref) return;
+        ThemeService.Apply(pref); // paleti değiştirir + kök sayfayı yeniden kurar
+    }
+
     private readonly SyncedVideoPipeline _pipeline;
 
     public SettingsViewModel(DatabaseService db, BackupService backup, AuthService auth, UpdateService updates, SyncedVideoPipeline pipeline)
@@ -72,6 +100,12 @@ public partial class SettingsViewModel : BaseViewModel
     public async Task LoadAsync()
     {
         Settings = await _db.GetSettingsAsync();
+
+        // Tema picker'ını mevcut tercihe ayarla (uygulamayı yeniden tetiklemeden)
+        _suppressThemeApply = true;
+        SelectedTheme = ThemePrefToDisplay(ThemeService.CurrentPref);
+        _suppressThemeApply = false;
+
         RefreshBackupStatus();
 
         // Açılışta sessiz background kontrolü (kullanıcı istemişse)

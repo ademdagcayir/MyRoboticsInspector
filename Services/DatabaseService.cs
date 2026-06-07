@@ -113,6 +113,46 @@ public class DatabaseService
             : await db.UpdateAsync(inspection);
     }
 
+    /// <summary>
+    /// Bir projede bir sonraki boş kanal sıra numarasını döndürür (mevcut en büyük + 1, ilk kanal = 1).
+    /// </summary>
+    public async Task<int> GetNextKanalNoAsync(int jobId)
+    {
+        var db = await GetConnectionAsync();
+        var list = await db.Table<Inspection>().Where(i => i.JobId == jobId).ToListAsync();
+        var max = list.Where(i => i.KanalNo.HasValue)
+                      .Select(i => i.KanalNo!.Value)
+                      .DefaultIfEmpty(0)
+                      .Max();
+        return max + 1;
+    }
+
+    /// <summary>
+    /// Projedeki numarası olmayan kanallara kronolojik sırayla (oluşturulma tarihine göre)
+    /// 1'den başlayarak sıra numarası atar. Zaten numarası olanlara dokunmaz —
+    /// eski / içe aktarılmış kanalları geriye dönük numaralandırmak için.
+    /// </summary>
+    public async Task EnsureKanalNumbersAsync(int jobId)
+    {
+        var db = await GetConnectionAsync();
+        var list = await db.Table<Inspection>().Where(i => i.JobId == jobId).ToListAsync();
+        if (list.Count == 0) return;
+
+        var next = list.Where(i => i.KanalNo.HasValue)
+                       .Select(i => i.KanalNo!.Value)
+                       .DefaultIfEmpty(0)
+                       .Max();
+
+        foreach (var ch in list.OrderBy(i => i.StartedAt).ThenBy(i => i.Id))
+        {
+            if (!ch.KanalNo.HasValue)
+            {
+                ch.KanalNo = ++next;
+                await db.UpdateAsync(ch);
+            }
+        }
+    }
+
     public async Task<List<Defect>> GetDefectsAsync(int inspectionId)
     {
         var db = await GetConnectionAsync();

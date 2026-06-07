@@ -47,28 +47,40 @@ public static class MauiProgram
                         Kind = Microsoft.UI.Composition.SystemBackdrops.MicaKind.BaseAlt
                     };
 
-                    // Kök içeriği koyu temaya zorla → Mica koyu render olur, başlık çubuğu koyu görünür.
-                    void ApplyDark()
+                    // Kök içeriği uygulama temasına göre ayarla → Mica + başlık çubuğu doğru tonla render olur.
+                    bool IsLightTheme()
+                    {
+                        var t = Microsoft.Maui.Controls.Application.Current?.UserAppTheme ?? AppTheme.Dark;
+                        if (t == AppTheme.Light) return true;
+                        if (t == AppTheme.Dark)  return false;
+                        return (Microsoft.Maui.Controls.Application.Current?.PlatformAppTheme) == AppTheme.Light;
+                    }
+                    void ApplyTheme()
                     {
                         if (window.Content is Microsoft.UI.Xaml.FrameworkElement fe)
-                            fe.RequestedTheme = Microsoft.UI.Xaml.ElementTheme.Dark;
+                            fe.RequestedTheme = IsLightTheme()
+                                ? Microsoft.UI.Xaml.ElementTheme.Light
+                                : Microsoft.UI.Xaml.ElementTheme.Dark;
                     }
-                    ApplyDark();
-                    window.Activated += (_, _) => ApplyDark();
+                    ApplyTheme();
+                    window.Activated += (_, _) => ApplyTheme();
 
                     var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
                     var id = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
                     var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(id);
                     if (appWindow?.TitleBar is { } tb)
                     {
+                        var fg = IsLightTheme() ? Microsoft.UI.ColorHelper.FromArgb(255, 28, 28, 30) : Microsoft.UI.Colors.White;
+                        var hover = IsLightTheme() ? Microsoft.UI.ColorHelper.FromArgb(20, 0, 0, 0) : Microsoft.UI.ColorHelper.FromArgb(38, 255, 255, 255);
+                        var pressed = IsLightTheme() ? Microsoft.UI.ColorHelper.FromArgb(12, 0, 0, 0) : Microsoft.UI.ColorHelper.FromArgb(20, 255, 255, 255);
                         tb.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
                         tb.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
-                        tb.ButtonForegroundColor = Microsoft.UI.Colors.White;
+                        tb.ButtonForegroundColor = fg;
                         tb.ButtonInactiveForegroundColor = Microsoft.UI.ColorHelper.FromArgb(255, 142, 142, 147);
-                        tb.ButtonHoverBackgroundColor = Microsoft.UI.ColorHelper.FromArgb(38, 255, 255, 255);
-                        tb.ButtonHoverForegroundColor = Microsoft.UI.Colors.White;
-                        tb.ButtonPressedBackgroundColor = Microsoft.UI.ColorHelper.FromArgb(20, 255, 255, 255);
-                        tb.ButtonPressedForegroundColor = Microsoft.UI.Colors.White;
+                        tb.ButtonHoverBackgroundColor = hover;
+                        tb.ButtonHoverForegroundColor = fg;
+                        tb.ButtonPressedBackgroundColor = pressed;
+                        tb.ButtonPressedForegroundColor = fg;
                     }
                 }
                 catch { /* Mica yoksa klasik koyu tema yeterli */ }
@@ -89,6 +101,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<SyncedVideoPipeline>();
         builder.Services.AddSingleton<FfmpegOverlayRecorder>();
         builder.Services.AddSingleton<BackupService>();
+        builder.Services.AddSingleton<BrokerService>();
         builder.Services.AddSingleton<RobotDriveStreamer>();
         builder.Services.AddSingleton<IGamepadInput, XInputGamepadService>();
         builder.Services.AddSingleton<GamepadCommandMapper>();

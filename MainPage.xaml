@@ -13,13 +13,24 @@
     <Grid Padding="12" RowDefinitions="*,Auto" ColumnDefinitions="*,300" ColumnSpacing="12">
 
         <!-- ============== VIDEO + OVERLAY ============== -->
-        <Grid Grid.Row="0" Grid.Column="0" x:Name="VideoContainer">
-            <Border Stroke="{StaticResource ColorBorder}" StrokeThickness="1"
+        <Grid Grid.Row="0" Grid.Column="0" x:Name="VideoContainer" RowDefinitions="Auto,*" RowSpacing="10">
+
+            <!-- Büyük alan görünüm seçici: Kamera / MQTT Log / Robot-Pano Konsolu -->
+            <Grid Grid.Row="0" ColumnDefinitions="Auto,300,*" ColumnSpacing="10" Padding="2,0">
+                <Label Grid.Column="0" Text="Görünüm" VerticalOptions="Center"
+                       TextColor="{StaticResource ColorTextSecondary}" FontSize="13" FontAttributes="Bold" />
+                <Picker Grid.Column="1" ItemsSource="{Binding BigViewOptions}"
+                        SelectedItem="{Binding BigViewMode}" />
+            </Grid>
+
+            <Border Grid.Row="1" Stroke="{StaticResource ColorBorder}" StrokeThickness="1"
                     Background="{StaticResource GradientVideoVoid}" StrokeShape="RoundRectangle 14">
                 <Border.Shadow>
                     <Shadow Brush="#000000" Offset="0,10" Radius="28" Opacity="0.55" />
                 </Border.Shadow>
                 <Grid>
+                  <!-- ===== KAMERA ===== -->
+                  <Grid IsVisible="{Binding IsBigCamera}">
                     <!-- Canlı kamera: SkiaSharp composite kare.
                          Proje/adres/baca/metre overlay'i kareye SENKRON gömülü (canlı=kayıt). -->
                     <skia:SKCanvasView x:Name="VideoCanvas"
@@ -46,14 +57,92 @@
                                HorizontalOptions="Center" HorizontalTextAlignment="Center"
                                IsVisible="{Binding StatusMessage, Converter={StaticResource StringNotEmpty}}" />
                     </VerticalStackLayout>
+                  </Grid>
+                  <!-- /KAMERA -->
+
+                  <!-- ===== MQTT LOG (büyük görünüm) ===== -->
+                  <Grid IsVisible="{Binding IsBigMqtt}" RowDefinitions="Auto,*" Padding="14" RowSpacing="8">
+                      <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                          <Label Grid.Column="0" Text="MQTT TRAFİK" TextColor="White"
+                                 FontAttributes="Bold" FontSize="15" VerticalOptions="Center" />
+                          <Button Grid.Column="1" Text="🗑 Temizle" Style="{StaticResource QuietButton}"
+                                  Padding="10,4" Command="{Binding ClearMqttLogCommand}" />
+                          <Button Grid.Column="2" Style="{StaticResource QuietButton}" Padding="10,4"
+                                  Command="{Binding ToggleBrokerCommand}">
+                              <Button.Triggers>
+                                  <DataTrigger TargetType="Button" Binding="{Binding IsBrokerRunning}" Value="True">
+                                      <Setter Property="Text" Value="■ Broker Durdur" />
+                                  </DataTrigger>
+                                  <DataTrigger TargetType="Button" Binding="{Binding IsBrokerRunning}" Value="False">
+                                      <Setter Property="Text" Value="▶ Broker Başlat" />
+                                  </DataTrigger>
+                              </Button.Triggers>
+                          </Button>
+                      </Grid>
+                      <CollectionView Grid.Row="1" ItemsSource="{Binding MqttLog}"
+                                      VerticalScrollBarVisibility="Always">
+                          <CollectionView.EmptyView>
+                              <Label Text="Henüz mesaj yok — broker'a bağlan" TextColor="#8A8F9C"
+                                     FontSize="12" HorizontalOptions="Center" Margin="0,24" />
+                          </CollectionView.EmptyView>
+                          <CollectionView.ItemTemplate>
+                              <DataTemplate x:DataType="services:MqttLogEntry">
+                                  <Grid Padding="8,3" ColumnDefinitions="70,58,150,*" ColumnSpacing="8">
+                                      <Label Grid.Column="0" Text="{Binding TimeStr}" FontSize="10" TextColor="#8A8F9C" />
+                                      <Label Grid.Column="1" Text="{Binding Label}" FontSize="10" FontAttributes="Bold"
+                                             TextColor="{StaticResource ColorCyan}" />
+                                      <Label Grid.Column="2" Text="{Binding Topic}" FontSize="10" TextColor="#8A8F9C"
+                                             LineBreakMode="TailTruncation" />
+                                      <Label Grid.Column="3" Text="{Binding Payload}" FontSize="11" TextColor="White"
+                                             FontFamily="OpenSansRegular" LineBreakMode="TailTruncation" />
+                                  </Grid>
+                              </DataTemplate>
+                          </CollectionView.ItemTemplate>
+                      </CollectionView>
+                  </Grid>
+
+                  <!-- ===== ROBOT / PANO KONSOLU (büyük görünüm) ===== -->
+                  <Grid IsVisible="{Binding IsBigConsole}" RowDefinitions="Auto,*" Padding="14" RowSpacing="8">
+                      <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
+                          <Label Grid.Column="0" Text="CİHAZ KONSOLU" TextColor="White"
+                                 FontAttributes="Bold" FontSize="15" VerticalOptions="Center" />
+                          <Button Grid.Column="1" Text="🤖 Robot Teşhis" Style="{StaticResource SecondaryButton}"
+                                  FontSize="12" Padding="10,4" Command="{Binding RunRobotDiagnosticsCommand}" />
+                          <Button Grid.Column="2" Text="🛠 Pano Teşhis" Style="{StaticResource SecondaryButton}"
+                                  FontSize="12" Padding="10,4" Command="{Binding RunPanoDiagnosticsCommand}" />
+                          <Button Grid.Column="3" Text="🗑" Style="{StaticResource QuietButton}"
+                                  Padding="10,4" Command="{Binding ClearDeviceLogCommand}" />
+                      </Grid>
+                      <CollectionView Grid.Row="1" ItemsSource="{Binding DeviceLog}"
+                                      VerticalScrollBarVisibility="Always">
+                          <CollectionView.EmptyView>
+                              <Label Text="Cihaz logu yok — Robot/Pano Teşhis'e bas" TextColor="#8A8F9C"
+                                     FontSize="12" HorizontalOptions="Center" Margin="0,24" />
+                          </CollectionView.EmptyView>
+                          <CollectionView.ItemTemplate>
+                              <DataTemplate x:DataType="m:DeviceLogEntry">
+                                  <Grid Padding="8,3" ColumnDefinitions="70,56,*" ColumnSpacing="8">
+                                      <Label Grid.Column="0" Text="{Binding TimeStr}" FontSize="10" TextColor="#8A8F9C" />
+                                      <Border Grid.Column="1" Padding="4,1" StrokeThickness="0"
+                                              StrokeShape="RoundRectangle 3" BackgroundColor="{Binding SourceColor}"
+                                              VerticalOptions="Center" HorizontalOptions="Start">
+                                          <Label Text="{Binding SourceLabel}" FontSize="8" FontAttributes="Bold" TextColor="White" />
+                                      </Border>
+                                      <Label Grid.Column="2" Text="{Binding Message}" FontSize="11" TextColor="White"
+                                             FontFamily="OpenSansRegular" />
+                                  </Grid>
+                              </DataTemplate>
+                          </CollectionView.ItemTemplate>
+                      </CollectionView>
+                  </Grid>
                 </Grid>
             </Border>
 
             <!-- CANLI SENSÖR ŞERİDİ — operatör farkındalığı (kayda GÖMÜLMEZ).
                  Proje/adres/baca/metre/saat/REC artık composite kareye SENKRON gömülü. -->
-            <VerticalStackLayout Padding="18" Spacing="2" InputTransparent="True"
+            <VerticalStackLayout Grid.Row="1" Padding="18" Spacing="2" InputTransparent="True"
                                  HorizontalOptions="End" VerticalOptions="End"
-                                 IsVisible="{Binding HasLiveFrame}">
+                                 IsVisible="{Binding IsBigCamera}">
                 <Label Text="{Binding Telemetry.TiltDegrees, StringFormat='Eğim: {0:0.0}°', TargetNullValue=''}"
                        TextColor="White" FontSize="12" HorizontalOptions="End" />
                 <Label Text="{Binding Telemetry.PressureBar, StringFormat='Basınç: {0:0.0} bar', TargetNullValue=''}"
@@ -99,9 +188,9 @@
                                             <Grid ColumnDefinitions="50,*,Auto" ColumnSpacing="6">
                                                 <Image Grid.Column="0" Source="{Binding PhotoPath}"
                                                        HeightRequest="36" WidthRequest="50"
-                                                       Aspect="AspectFill" BackgroundColor="#222" />
+                                                       Aspect="AspectFill" BackgroundColor="{StaticResource ColorSurfaceSubtle}" />
                                                 <VerticalStackLayout Grid.Column="1" Spacing="0" VerticalOptions="Center">
-                                                    <Label TextColor="White" FontSize="12" FontAttributes="Bold">
+                                                    <Label TextColor="{StaticResource ColorTextPrimary}" FontSize="12" FontAttributes="Bold">
                                                         <Label.FormattedText>
                                                             <FormattedString>
                                                                 <Span Text="{Binding IskiCode, TargetNullValue=''}" TextColor="{StaticResource ColorWarning}" />
@@ -171,6 +260,72 @@
                         </VerticalStackLayout>
                     </Border>
 
+                    <!-- ============== CİHAZ KONSOLU (robot/log + pano/log) ============== -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <VerticalStackLayout Spacing="6">
+                            <Grid ColumnDefinitions="*,Auto,Auto">
+                                <Label Grid.Column="0" Text="CİHAZ KONSOLU" Style="{StaticResource SectionTitle}"
+                                       VerticalOptions="Center" />
+                                <Button Grid.Column="1" Text="🗑"
+                                        Style="{StaticResource QuietButton}" Padding="8,4"
+                                        Command="{Binding ClearDeviceLogCommand}"
+                                        IsVisible="{Binding ShowDeviceConsole}"
+                                        ToolTipProperties.Text="Konsolu temizle" />
+                                <Button Grid.Column="2"
+                                        Text="{Binding ShowDeviceConsole, Converter={StaticResource BoolToGamepadButtonText}}"
+                                        Style="{StaticResource QuietButton}" Padding="8,4"
+                                        Command="{Binding ToggleDeviceConsoleCommand}" />
+                            </Grid>
+
+                            <!-- Teşhis tetikleme butonları -->
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                                <Button Grid.Column="0" Text="🤖 Robot Teşhis"
+                                        Style="{StaticResource SecondaryButton}" FontSize="12" Padding="0,6"
+                                        Command="{Binding RunRobotDiagnosticsCommand}" />
+                                <Button Grid.Column="1" Text="🛠 Pano Teşhis"
+                                        Style="{StaticResource SecondaryButton}" FontSize="12" Padding="0,6"
+                                        Command="{Binding RunPanoDiagnosticsCommand}" />
+                            </Grid>
+
+                            <!-- Konsol listesi (aç/kapat) -->
+                            <Border Background="{StaticResource ColorSurfaceSubtle}" StrokeThickness="0" StrokeShape="RoundRectangle 6"
+                                    Padding="0" IsVisible="{Binding ShowDeviceConsole}">
+                                <CollectionView ItemsSource="{Binding DeviceLog}"
+                                                HeightRequest="240"
+                                                VerticalScrollBarVisibility="Always">
+                                    <CollectionView.EmptyView>
+                                        <Label Text="Cihaz logu yok — robot/pano bağlanınca akmaya başlar"
+                                               TextColor="{StaticResource ColorTextTertiary}" FontSize="11"
+                                               HorizontalOptions="Center" Margin="0,16" />
+                                    </CollectionView.EmptyView>
+                                    <CollectionView.ItemTemplate>
+                                        <DataTemplate x:DataType="m:DeviceLogEntry">
+                                            <Grid Padding="8,3" ColumnDefinitions="50,46,*" ColumnSpacing="6">
+                                                <!-- Zaman -->
+                                                <Label Grid.Column="0" Text="{Binding TimeStr}"
+                                                       FontSize="9" TextColor="{StaticResource ColorTextTertiary}"
+                                                       VerticalOptions="Center" />
+                                                <!-- Kaynak rozeti -->
+                                                <Border Grid.Column="1" Padding="4,1" StrokeThickness="0"
+                                                        StrokeShape="RoundRectangle 3"
+                                                        BackgroundColor="{Binding SourceColor}"
+                                                        VerticalOptions="Center" HorizontalOptions="Start">
+                                                    <Label Text="{Binding SourceLabel}" FontSize="8" FontAttributes="Bold"
+                                                           TextColor="White" />
+                                                </Border>
+                                                <!-- Mesaj -->
+                                                <Label Grid.Column="2" Text="{Binding Message}"
+                                                       FontSize="11" TextColor="{StaticResource ColorTextPrimary}"
+                                                       FontFamily="OpenSansRegular"
+                                                       VerticalOptions="Center" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </CollectionView.ItemTemplate>
+                                </CollectionView>
+                            </Border>
+                        </VerticalStackLayout>
+                    </Border>
+
                     <!-- ============== MQTT TRAFFIC LOG ============== -->
                     <Border Style="{StaticResource CardBorder}">
                         <VerticalStackLayout Spacing="6">
@@ -188,26 +343,39 @@
                                         Command="{Binding ToggleMqttLogCommand}" />
                             </Grid>
 
-                            <!-- Bağlantı durumu satırı -->
-                            <Label FontSize="11">
-                                <Label.FormattedText>
-                                    <FormattedString>
-                                        <Span Text="Broker  " TextColor="#888" />
-                                        <Span Text="{Binding IsRobotConnected, Converter={StaticResource BoolToConnectionText}}"
-                                              TextColor="{Binding IsRobotConnected, Converter={StaticResource BoolToConnectionColor}}" />
-                                    </FormattedString>
-                                </Label.FormattedText>
-                            </Label>
+                            <!-- Yerel broker yönetimi + bağlantı durumu -->
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" Margin="0,0,0,2">
+                                <Label Grid.Column="0" FontSize="11" VerticalOptions="Center">
+                                    <Label.FormattedText>
+                                        <FormattedString>
+                                            <Span Text="Broker  " TextColor="{StaticResource ColorTextTertiary}" />
+                                            <Span Text="{Binding IsRobotConnected, Converter={StaticResource BoolToConnectionText}}"
+                                                  TextColor="{Binding IsRobotConnected, Converter={StaticResource BoolToConnectionColor}}" />
+                                        </FormattedString>
+                                    </Label.FormattedText>
+                                </Label>
+                                <Button Grid.Column="1" Style="{StaticResource QuietButton}" Padding="10,4" FontSize="12"
+                                        Command="{Binding ToggleBrokerCommand}">
+                                    <Button.Triggers>
+                                        <DataTrigger TargetType="Button" Binding="{Binding IsBrokerRunning}" Value="True">
+                                            <Setter Property="Text" Value="■ Broker'ı Durdur" />
+                                        </DataTrigger>
+                                        <DataTrigger TargetType="Button" Binding="{Binding IsBrokerRunning}" Value="False">
+                                            <Setter Property="Text" Value="▶ Broker'ı Başlat" />
+                                        </DataTrigger>
+                                    </Button.Triggers>
+                                </Button>
+                            </Grid>
 
                             <!-- Log listesi (aç/kapat) -->
-                            <Border Background="#0d0d0d" StrokeThickness="0" StrokeShape="RoundRectangle 6"
+                            <Border Background="{StaticResource ColorSurfaceSubtle}" StrokeThickness="0" StrokeShape="RoundRectangle 6"
                                     Padding="0" IsVisible="{Binding ShowMqttLog}">
                                 <CollectionView ItemsSource="{Binding MqttLog}"
                                                 HeightRequest="260"
                                                 VerticalScrollBarVisibility="Always">
                                     <CollectionView.EmptyView>
                                         <Label Text="Henüz mesaj yok — broker'a bağlan"
-                                               TextColor="#555" FontSize="11"
+                                               TextColor="{StaticResource ColorTextTertiary}" FontSize="11"
                                                HorizontalOptions="Center" Margin="0,16" />
                                     </CollectionView.EmptyView>
                                     <CollectionView.ItemTemplate>
@@ -217,7 +385,7 @@
                                                 <!-- Zaman -->
                                                 <Label Grid.Row="0" Grid.Column="0"
                                                        Text="{Binding TimeStr}"
-                                                       FontSize="9" TextColor="#555"
+                                                       FontSize="9" TextColor="{StaticResource ColorTextTertiary}"
                                                        VerticalOptions="Start" />
                                                 <!-- Yön etiketi -->
                                                 <Label Grid.Row="0" Grid.Column="1"
@@ -228,35 +396,35 @@
                                                         <DataTrigger TargetType="Label"
                                                                      Binding="{Binding Direction}"
                                                                      Value="TX">
-                                                            <Setter Property="TextColor" Value="#4fc3f7" />
+                                                            <Setter Property="TextColor" Value="{StaticResource ColorCyan}" />
                                                         </DataTrigger>
                                                         <DataTrigger TargetType="Label"
                                                                      Binding="{Binding Direction}"
                                                                      Value="RX">
-                                                            <Setter Property="TextColor" Value="#81c784" />
+                                                            <Setter Property="TextColor" Value="{StaticResource ColorSuccess}" />
                                                         </DataTrigger>
                                                         <DataTrigger TargetType="Label"
                                                                      Binding="{Binding Direction}"
                                                                      Value="Info">
-                                                            <Setter Property="TextColor" Value="#ffcc66" />
+                                                            <Setter Property="TextColor" Value="{StaticResource ColorWarning}" />
                                                         </DataTrigger>
                                                         <DataTrigger TargetType="Label"
                                                                      Binding="{Binding Direction}"
                                                                      Value="Error">
-                                                            <Setter Property="TextColor" Value="#ef5350" />
+                                                            <Setter Property="TextColor" Value="{StaticResource ColorDanger}" />
                                                         </DataTrigger>
                                                     </Label.Triggers>
                                                 </Label>
                                                 <!-- Topic -->
                                                 <Label Grid.Row="0" Grid.Column="2"
                                                        Text="{Binding Topic}"
-                                                       FontSize="9" TextColor="#888"
+                                                       FontSize="9" TextColor="{StaticResource ColorTextTertiary}"
                                                        LineBreakMode="TailTruncation"
                                                        VerticalOptions="Start" />
                                                 <!-- Payload -->
                                                 <Label Grid.Row="1" Grid.ColumnSpan="3"
                                                        Text="{Binding Payload}"
-                                                       FontSize="11" TextColor="#ddd"
+                                                       FontSize="11" TextColor="{StaticResource ColorTextPrimary}"
                                                        FontFamily="OpenSansRegular"
                                                        LineBreakMode="TailTruncation"
                                                        Margin="0,0,0,4" />
@@ -282,33 +450,33 @@
                             <Label Text="{Binding GamepadStatusText}" Style="{StaticResource Caption}" />
 
                             <!-- Joystick anlık girdi göstergesi -->
-                            <Border Background="#111" StrokeThickness="0" StrokeShape="RoundRectangle 6"
+                            <Border Background="{StaticResource ColorSurfaceSubtle}" StrokeThickness="0" StrokeShape="RoundRectangle 6"
                                     Padding="10,8"
                                     IsVisible="{Binding IsGamepadConnected}">
                                 <VerticalStackLayout Spacing="4">
                                     <!-- Butonlar -->
                                     <Label Text="BUTONLAR" Style="{StaticResource SectionTitle}" FontSize="9" />
                                     <Label Text="{Binding GamepadButtons}"
-                                           TextColor="#ffcc66" FontSize="13" FontAttributes="Bold"
+                                           TextColor="{StaticResource ColorWarning}" FontSize="13" FontAttributes="Bold"
                                            FontFamily="OpenSansRegular" />
 
                                     <!-- Sol stick -->
                                     <Grid ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,4,0,0">
                                         <VerticalStackLayout Grid.Column="0" Spacing="2">
                                             <Label Text="SOL STICK" Style="{StaticResource SectionTitle}" FontSize="9" />
-                                            <Label FontSize="11" TextColor="White">
+                                            <Label FontSize="11" TextColor="{StaticResource ColorTextPrimary}">
                                                 <Label.FormattedText>
                                                     <FormattedString>
-                                                        <Span Text="X " TextColor="#888" />
+                                                        <Span Text="X " TextColor="{StaticResource ColorTextSecondary}" />
                                                         <Span Text="{Binding GamepadLX, StringFormat='{0:+0.00;-0.00; 0.00}'}"
                                                               TextColor="{StaticResource ColorHighlight}" />
                                                     </FormattedString>
                                                 </Label.FormattedText>
                                             </Label>
-                                            <Label FontSize="11" TextColor="White">
+                                            <Label FontSize="11" TextColor="{StaticResource ColorTextPrimary}">
                                                 <Label.FormattedText>
                                                     <FormattedString>
-                                                        <Span Text="Y " TextColor="#888" />
+                                                        <Span Text="Y " TextColor="{StaticResource ColorTextSecondary}" />
                                                         <Span Text="{Binding GamepadLY, StringFormat='{0:+0.00;-0.00; 0.00}'}"
                                                               TextColor="{StaticResource ColorHighlight}" />
                                                     </FormattedString>
@@ -319,19 +487,19 @@
                                         <!-- Sağ stick -->
                                         <VerticalStackLayout Grid.Column="1" Spacing="2">
                                             <Label Text="SAĞ STICK" Style="{StaticResource SectionTitle}" FontSize="9" />
-                                            <Label FontSize="11" TextColor="White">
+                                            <Label FontSize="11" TextColor="{StaticResource ColorTextPrimary}">
                                                 <Label.FormattedText>
                                                     <FormattedString>
-                                                        <Span Text="X " TextColor="#888" />
+                                                        <Span Text="X " TextColor="{StaticResource ColorTextSecondary}" />
                                                         <Span Text="{Binding GamepadRX, StringFormat='{0:+0.00;-0.00; 0.00}'}"
                                                               TextColor="{StaticResource ColorHighlight}" />
                                                     </FormattedString>
                                                 </Label.FormattedText>
                                             </Label>
-                                            <Label FontSize="11" TextColor="White">
+                                            <Label FontSize="11" TextColor="{StaticResource ColorTextPrimary}">
                                                 <Label.FormattedText>
                                                     <FormattedString>
-                                                        <Span Text="Y " TextColor="#888" />
+                                                        <Span Text="Y " TextColor="{StaticResource ColorTextSecondary}" />
                                                         <Span Text="{Binding GamepadRY, StringFormat='{0:+0.00;-0.00; 0.00}'}"
                                                               TextColor="{StaticResource ColorHighlight}" />
                                                     </FormattedString>
@@ -459,7 +627,7 @@
                                                 Command="{Binding Source={RelativeSource AncestorType={x:Type vm:LiveViewModel}}, Path=ApplyIskiCodeCommand}"
                                                 CommandParameter="{Binding .}" />
                                         </Border.GestureRecognizers>
-                                        <Label FontSize="12" TextColor="White">
+                                        <Label FontSize="12" TextColor="{StaticResource ColorTextPrimary}">
                                             <Label.FormattedText>
                                                 <FormattedString>
                                                     <Span Text="{Binding Code}" TextColor="{StaticResource ColorWarning}" FontAttributes="Bold" />

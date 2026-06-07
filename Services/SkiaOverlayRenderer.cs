@@ -88,12 +88,10 @@ public sealed class SkiaOverlayRenderer
         if (!string.IsNullOrWhiteSpace(m.FlowText))
             y = DrawLeft(canvas, $"Akış yönü: {m.FlowText}", pad, y, bodySize, Cyan, _regular) + gap;
 
-        // ── ÜST SAĞ: saat + REC ──
+        // ── ÜST SAĞ: saat ── (REC göstergesi XAML'de yanıp sönen nokta olarak çizilir)
         float yr = pad;
         if (!string.IsNullOrWhiteSpace(m.NowText))
             yr = DrawRight(canvas, m.NowText!, w - pad, yr, bodySize, White, _regular) + gap;
-        if (m.IsRecording)
-            yr = DrawRight(canvas, "● REC", w - pad, yr, bodySize, RecRed, _bold) + gap;
 
         // ── ALT SOL: büyük metre (alttan hizalı) ──
         if (m.Meters is double meters)

@@ -76,4 +76,20 @@ public class Inspection
     [MaxLength(500)] public string? VideoPath { get; set; }
     public double? DistanceMeters { get; set; }
     public string? Notes { get; set; }
+
+    /// <summary>
+    /// Ekranda gösterilecek kanal adı: "Kanal 1", varsa belediye kodu da eklenir
+    /// ("Kanal 1 · YK3697A"). KanalNo yoksa koda, o da yoksa Id'ye düşer.
+    /// </summary>
+    [Ignore]
+    public string DisplayName
+    {
+        get
+        {
+            var num = KanalNo.HasValue ? $"Kanal {KanalNo}" : null;
+            if (!string.IsNullOrWhiteSpace(ChannelCode))
+                return num is null ? ChannelCode! : $"{num} · {ChannelCode}";
+            return num ?? $"#{Id}";
+        }
+    }
 }

@@ -77,12 +77,12 @@
 
                         <VerticalStackLayout Spacing="4">
                             <Label Text="GÖRÜNTÜLEME" Style="{StaticResource SectionTitle}" />
-                            <Border Padding="6,3" Background="#0d2b1a"
+                            <Border Padding="6,3" Background="{StaticResource ColorSuccessMuted}"
                                     StrokeShape="RoundRectangle 4" StrokeThickness="0">
                                 <Label Text="{Binding Project.Stage, Converter={StaticResource StageLabelConverter}}"
-                                       FontSize="11" TextColor="#5ccf8a" />
+                                       FontSize="11" TextColor="{StaticResource ColorSuccess}" />
                             </Border>
-                            <Border Padding="6,3" Background="#1a1a2e"
+                            <Border Padding="6,3" Background="{StaticResource ColorAccentMuted}"
                                     StrokeShape="RoundRectangle 4" StrokeThickness="0">
                                 <Label Text="{Binding Project.Purpose, Converter={StaticResource PurposeLabelConverter}}"
                                        FontSize="11" TextColor="{StaticResource ColorAccent}" />
@@ -127,17 +127,31 @@
         <!-- ChannelList: * (panel açılınca küçülür) | Stream: 960px sabit (hiç değişmez) -->
         <Grid Grid.Column="2" ColumnDefinitions="*,960" ColumnSpacing="0">
 
-            <!-- ── Sol: Kompakt Kanal Listesi ── -->
-            <Grid Grid.Column="0" RowDefinitions="Auto,*">
+            <!-- ── Sol: Modern Kanal Grid'i ── -->
+            <Grid Grid.Column="0" RowDefinitions="Auto,Auto,*">
+
+                <!-- Başlık -->
                 <Grid Grid.Row="0" Padding="12,10,8,8" ColumnDefinitions="*,Auto">
                     <Label Grid.Column="0"
                            Text="{Binding TotalChannels, StringFormat='KANALLAR ({0})'}"
                            Style="{StaticResource SectionTitle}" VerticalOptions="Center" />
                 </Grid>
-                <BoxView Grid.Row="0" VerticalOptions="End" HeightRequest="1"
+
+                <!-- Kolon başlıkları -->
+                <Grid Grid.Row="1" Padding="10,6" ColumnSpacing="8"
+                      ColumnDefinitions="34,2*,2*,2*,68,80"
+                      BackgroundColor="{StaticResource ColorSurfaceSubtle}">
+                    <Label Grid.Column="0" Text="No"         Style="{StaticResource SectionTitle}" LineBreakMode="NoWrap" />
+                    <Label Grid.Column="1" Text="SOKAK"      Style="{StaticResource SectionTitle}" LineBreakMode="TailTruncation" />
+                    <Label Grid.Column="2" Text="GİRİŞ"      Style="{StaticResource SectionTitle}" LineBreakMode="TailTruncation" />
+                    <Label Grid.Column="3" Text="ÇIKIŞ"      Style="{StaticResource SectionTitle}" LineBreakMode="TailTruncation" />
+                    <Label Grid.Column="4" Text="METRE"      Style="{StaticResource SectionTitle}" LineBreakMode="NoWrap" HorizontalOptions="End" />
+                    <Label Grid.Column="5" Text="İŞLEM"      Style="{StaticResource SectionTitle}" LineBreakMode="NoWrap" HorizontalOptions="Center" />
+                </Grid>
+                <BoxView Grid.Row="1" VerticalOptions="End" HeightRequest="1"
                          Color="{StaticResource ColorBorder}" />
 
-                <CollectionView Grid.Row="1" ItemsSource="{Binding Channels}" SelectionMode="None">
+                <CollectionView Grid.Row="2" ItemsSource="{Binding Channels}" SelectionMode="None">
                     <CollectionView.EmptyView>
                         <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center"
                                              Spacing="8" Padding="20">
@@ -150,55 +164,85 @@
                     </CollectionView.EmptyView>
                     <CollectionView.ItemTemplate>
                         <DataTemplate x:DataType="vm:ChannelListItem">
-                            <Grid Padding="10,0,6,0" HeightRequest="44"
-                                  ColumnDefinitions="8,*,24,24,24" ColumnSpacing="2"
+                            <Grid Padding="10,0" HeightRequest="46"
+                                  ColumnDefinitions="34,2*,2*,2*,68,80" ColumnSpacing="8"
                                   BackgroundColor="{Binding IsSelected, Converter={StaticResource BoolToHighlightColor}}">
                                 <Grid.GestureRecognizers>
                                     <TapGestureRecognizer
                                         Command="{Binding Source={x:Reference PageRoot}, Path=BindingContext.SelectChannelCommand}"
                                         CommandParameter="{Binding .}" />
                                 </Grid.GestureRecognizers>
-                                <Ellipse Grid.Column="0" Fill="{Binding StatusColor}"
-                                         WidthRequest="7" HeightRequest="7"
-                                         HorizontalOptions="Center" VerticalOptions="Center" />
-                                <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
-                                    <HorizontalStackLayout Spacing="5">
-                                        <Label Text="{Binding Inspection.ChannelCode, TargetNullValue='(kod yok)'}"
-                                               FontSize="12" FontAttributes="Bold"
-                                               TextColor="{StaticResource ColorTextPrimary}" />
-                                        <Border Padding="4,1" Background="{Binding StatusColor}"
-                                                StrokeThickness="0" StrokeShape="RoundRectangle 3"
-                                                IsVisible="{Binding DefectCount, Converter={StaticResource IntToBool}}">
-                                            <Label Text="{Binding DefectCount}" FontSize="9"
-                                                   FontAttributes="Bold" TextColor="White" />
-                                        </Border>
-                                    </HorizontalStackLayout>
-                                    <Label Text="{Binding ManholeFlow}"
-                                           FontSize="10" TextColor="{StaticResource ColorTextTertiary}"
-                                           LineBreakMode="TailTruncation" />
-                                </VerticalStackLayout>
 
-                                <!-- ▶ Video oynat (sadece video kaydı varsa) -->
-                                <Button Grid.Column="2" Text="▶" FontSize="10"
-                                        Background="Transparent"
-                                        TextColor="{StaticResource ColorAccent}"
-                                        HeightRequest="40" WidthRequest="24" Padding="0"
-                                        IsVisible="{Binding HasVideo}"
-                                        Command="{Binding Source={x:Reference PageRoot}, Path=BindingContext.PlayVideoCommand}"
-                                        CommandParameter="{Binding .}" />
+                                <!-- Sağ tık menüsü -->
+                                <FlyoutBase.ContextFlyout>
+                                    <MenuFlyout>
+                                        <MenuFlyoutItem Text="Kanalı düzenle"
+                                            Command="{Binding Source={x:Reference PageRoot}, Path=BindingContext.EditCommand}"
+                                            CommandParameter="{Binding .}" />
+                                        <MenuFlyoutItem Text="Klasörü aç"
+                                            Command="{Binding Source={x:Reference PageRoot}, Path=BindingContext.OpenChannelFolderCommand}"
+                                            CommandParameter="{Binding .}" />
+                                        <MenuFlyoutItem Text="Rapor oluştur (2 PDF)"
+                                            Command="{Binding Source={x:Reference PageRoot}, Path=BindingContext.GenerateReportsCommand}"
+                                            CommandParameter="{Binding .}" />
+                                    </MenuFlyout>
+                                </FlyoutBase.ContextFlyout>
 
-                                <Button Grid.Column="3" Text="✎" FontSize="10"
-                                        Background="Transparent"
-                                        TextColor="{StaticResource ColorTextSecondary}"
-                                        HeightRequest="40" WidthRequest="24" Padding="0"
-                                        Command="{Binding Source={x:Reference PageRoot}, Path=BindingContext.EditCommand}"
-                                        CommandParameter="{Binding .}" />
-                                <Button Grid.Column="4" Text="✕" FontSize="10"
-                                        Background="Transparent" TextColor="#555"
-                                        HeightRequest="40" WidthRequest="24" Padding="0"
-                                        Command="{Binding Source={x:Reference PageRoot}, Path=BindingContext.DeleteCommand}"
-                                        CommandParameter="{Binding .}" />
-                                <BoxView Grid.ColumnSpan="5" VerticalOptions="End"
+                                <!-- No: durum noktası + sıra numarası rozeti -->
+                                <Grid Grid.Column="0" ColumnDefinitions="Auto,Auto" ColumnSpacing="4"
+                                      VerticalOptions="Center" HorizontalOptions="Start">
+                                    <Ellipse Grid.Column="0" Fill="{Binding StatusColor}"
+                                             WidthRequest="6" HeightRequest="6" VerticalOptions="Center" />
+                                    <Border Grid.Column="1" WidthRequest="22" HeightRequest="22"
+                                            Background="{StaticResource ColorSurfaceSubtle}"
+                                            Stroke="{StaticResource ColorBorder}" StrokeThickness="1"
+                                            StrokeShape="RoundRectangle 6" Padding="0"
+                                            VerticalOptions="Center">
+                                        <Label Text="{Binding NumberBadge}"
+                                               FontSize="11" FontAttributes="Bold"
+                                               TextColor="{StaticResource ColorHighlight}"
+                                               HorizontalOptions="Center" VerticalOptions="Center" />
+                                    </Border>
+                                </Grid>
+
+                                <Label Grid.Column="1" Text="{Binding StreetText}"
+                                       FontSize="12" FontAttributes="Bold"
+                                       TextColor="{StaticResource ColorTextPrimary}"
+                                       VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                                <Label Grid.Column="2" Text="{Binding EntryText}"
+                                       FontSize="12" TextColor="{StaticResource ColorTextSecondary}"
+                                       VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                                <Label Grid.Column="3" Text="{Binding ExitText}"
+                                       FontSize="12" TextColor="{StaticResource ColorTextSecondary}"
+                                       VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                                <Label Grid.Column="4" Text="{Binding MetersText}"
+                                       FontSize="12" TextColor="{StaticResource ColorTextPrimary}"
+                                       VerticalOptions="Center" HorizontalOptions="End" />
+
+                                <!-- İşlem: oynat / düzenle / sil -->
+                                <HorizontalStackLayout Grid.Column="5" Spacing="0"
+                                                       HorizontalOptions="End" VerticalOptions="Center">
+                                    <Button Text="▶" FontSize="11"
+                                            Background="Transparent"
+                                            TextColor="{StaticResource ColorAccent}"
+                                            HeightRequest="40" WidthRequest="24" Padding="0"
+                                            IsVisible="{Binding HasVideo}"
+                                            Command="{Binding Source={x:Reference PageRoot}, Path=BindingContext.PlayVideoCommand}"
+                                            CommandParameter="{Binding .}" />
+                                    <Button Text="✎" FontSize="11"
+                                            Background="Transparent"
+                                            TextColor="{StaticResource ColorTextSecondary}"
+                                            HeightRequest="40" WidthRequest="24" Padding="0"
+                                            Command="{Binding Source={x:Reference PageRoot}, Path=BindingContext.EditCommand}"
+                                            CommandParameter="{Binding .}" />
+                                    <Button Text="✕" FontSize="11"
+                                            Background="Transparent" TextColor="#777"
+                                            HeightRequest="40" WidthRequest="24" Padding="0"
+                                            Command="{Binding Source={x:Reference PageRoot}, Path=BindingContext.DeleteCommand}"
+                                            CommandParameter="{Binding .}" />
+                                </HorizontalStackLayout>
+
+                                <BoxView Grid.ColumnSpan="6" VerticalOptions="End"
                                          HeightRequest="1" Color="{StaticResource ColorBorder}" Opacity="0.4" />
                             </Grid>
                         </DataTemplate>
@@ -243,37 +287,43 @@
                                        TextColor="White" FontSize="11"
                                        IsVisible="{Binding SelectedChannelFlow, Converter={StaticResource StringNotEmpty}}" />
                             </VerticalStackLayout>
-                            <Label Grid.Column="1" Text="● REC" TextColor="#ff453a" FontSize="13" FontAttributes="Bold"
-                                   HorizontalOptions="End" VerticalOptions="Start"
-                                   IsVisible="{Binding Live.IsRecording}" />
+                            <!-- Kayıt göstergesi: yanıp sönen kırmızı nokta (yazı yok) -->
+                            <Ellipse Grid.Column="1" x:Name="RecDot"
+                                     WidthRequest="14" HeightRequest="14"
+                                     Fill="#ff453a"
+                                     HorizontalOptions="End" VerticalOptions="Start"
+                                     IsVisible="{Binding Live.IsRecording}" />
                         </Grid>
                     </Grid>
                 </Border>
 
                 <!-- ════ ROW 1: Apple Toolbar ════ -->
-                <Grid Grid.Row="1" ColumnDefinitions="*,Auto" BackgroundColor="#1c1c1e"
+                <Grid Grid.Row="1" ColumnDefinitions="*,Auto" BackgroundColor="{StaticResource ColorSurfaceHigh}"
                       Margin="0" Padding="0">
                     <!-- üst çizgi -->
-                    <BoxView Grid.ColumnSpan="2" VerticalOptions="Start" HeightRequest="1" Color="#2c2c2e" />
+                    <BoxView Grid.ColumnSpan="2" VerticalOptions="Start" HeightRequest="1" Color="{StaticResource ColorBorder}" />
 
                     <!-- Sol: aksiyon butonları -->
                     <HorizontalStackLayout Grid.Column="0" Spacing="8"
                                            Padding="16,8,0,8" VerticalOptions="Center">
                         <Label Text="{Binding SelectedChannelLabel}"
-                               FontSize="12" TextColor="#636366" VerticalOptions="Center" />
-                        <BoxView WidthRequest="1" HeightRequest="16" Color="#38383a" VerticalOptions="Center" />
+                               FontSize="12" TextColor="{StaticResource ColorTextSecondary}" VerticalOptions="Center" />
+                        <BoxView WidthRequest="1" HeightRequest="16" Color="{StaticResource ColorBorder}" VerticalOptions="Center" />
                         <Button Text="📷"
-                                BackgroundColor="Transparent" TextColor="White" FontSize="15"
-                                HeightRequest="32" WidthRequest="36" Padding="0"
-                                Command="{Binding Live.SnapshotCommand}" />
+                                BackgroundColor="{StaticResource ColorSurfaceSubtle}" TextColor="{StaticResource ColorTextPrimary}" FontSize="22"
+                                CornerRadius="12"
+                                HeightRequest="44" WidthRequest="58" Padding="0"
+                                ToolTipProperties.Text="Fotoğraf çek ve yorum ekle"
+                                Command="{Binding CapturePhotoCommand}" />
                         <Button Text="{Binding RecordButtonText}"
                                 BackgroundColor="{Binding RecordButtonColor}"
                                 TextColor="White" CornerRadius="12"
                                 FontSize="12" FontAttributes="Bold"
                                 HeightRequest="28" Padding="14,0"
+                                IsEnabled="{Binding CanStartRecording}"
                                 Command="{Binding StartChannelRecordingCommand}" />
                         <Button Text="Kanal Sonu"
-                                BackgroundColor="#2c2c2e" TextColor="#8e8e93"
+                                BackgroundColor="{StaticResource ColorSurfaceSubtle}" TextColor="{StaticResource ColorTextSecondary}"
                                 CornerRadius="12" FontSize="12"
                                 HeightRequest="28" Padding="12,0"
                                 IsEnabled="{Binding Live.IsRecording}"
@@ -284,16 +334,16 @@
                     <HorizontalStackLayout Grid.Column="1" Spacing="4"
                                            Padding="0,8,12,8" VerticalOptions="Center">
                         <Label Text="{Binding Live.StatusMessage}"
-                               FontSize="11" TextColor="#48484a"
+                               FontSize="11" TextColor="{StaticResource ColorTextTertiary}"
                                VerticalOptions="Center" MaximumWidthRequest="200"
                                LineBreakMode="TailTruncation" />
                         <Button Text="▶"
-                                BackgroundColor="Transparent" TextColor="#636366"
+                                BackgroundColor="Transparent" TextColor="{StaticResource ColorTextSecondary}"
                                 FontSize="13" HeightRequest="32" WidthRequest="30" Padding="0"
                                 Command="{Binding Live.StartStreamCommand}"
                                 IsVisible="{Binding Live.IsStreaming, Converter={StaticResource InvertedBool}}" />
                         <Button Text="⏹"
-                                BackgroundColor="Transparent" TextColor="#636366"
+                                BackgroundColor="Transparent" TextColor="{StaticResource ColorTextSecondary}"
                                 FontSize="13" HeightRequest="32" WidthRequest="30" Padding="0"
                                 Command="{Binding Live.StopStreamCommand}"
                                 IsVisible="{Binding Live.IsStreaming}" />
@@ -304,71 +354,85 @@
                 <Grid Grid.Row="2"
                       ColumnDefinitions="*,220"
                       ColumnSpacing="0"
-                      Background="#1c1c1e">
+                      Background="{StaticResource ColorSurface}">
 
                     <BoxView Grid.ColumnSpan="2" VerticalOptions="Start" HeightRequest="1"
-                             Color="#2c2c2e" />
+                             Color="{StaticResource ColorBorder}" />
 
                     <!-- ── Sol: Arıza / Kusur Resimleri ── -->
                     <Grid Grid.Column="0" RowDefinitions="Auto,*" Padding="12,8,8,8">
                         <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
                             <Label Grid.Column="0"
-                                   Text="{Binding Live.DefectCount, StringFormat='ARIZALAR ({0})'}"
+                                   Text="{Binding ChannelPhotos.Count, StringFormat='FOTOĞRAFLAR ({0})'}"
                                    FontSize="10" FontAttributes="Bold" CharacterSpacing="0.5"
-                                   TextColor="#636366" VerticalOptions="Center" />
+                                   TextColor="{StaticResource ColorTextSecondary}" VerticalOptions="Center" />
                             <Label Grid.Column="1"
                                    Text="{Binding SelectedChannelLabel}"
-                                   FontSize="10" TextColor="#48484a"
+                                   FontSize="10" TextColor="{StaticResource ColorTextTertiary}"
                                    VerticalOptions="Center" />
                         </Grid>
 
-                        <!-- Yatay scroll — thumbnail kartları -->
+                        <!-- Yatay scroll — fotoğraf thumbnail kartları (tıkla → yorumu düzenle).
+                             Scrollbar görünür: çok foto olunca eski kareler kaydırılarak görülebilir. -->
                         <ScrollView Grid.Row="1" Orientation="Horizontal"
-                                    HorizontalScrollBarVisibility="Never">
+                                    HorizontalScrollBarVisibility="Always">
                             <HorizontalStackLayout Spacing="8"
-                                                   BindableLayout.ItemsSource="{Binding Live.ActiveDefects}">
+                                                   BindableLayout.ItemsSource="{Binding ChannelPhotos}">
                                 <BindableLayout.EmptyView>
-                                    <Label Text="Henüz arıza kaydı yok" FontSize="11"
+                                    <Label Text="📷 Henüz fotoğraf yok — kamera ile çekin"
+                                           FontSize="11"
                                            TextColor="{StaticResource ColorTextTertiary}"
                                            VerticalOptions="Center" HorizontalOptions="Center"
                                            Margin="8,0" />
                                 </BindableLayout.EmptyView>
                                 <BindableLayout.ItemTemplate>
                                     <DataTemplate x:DataType="m:Defect">
-                                        <Border WidthRequest="80"
-                                                Background="#2c2c2e"
-                                                Stroke="#38383a"
+                                        <Border WidthRequest="96"
+                                                Background="{StaticResource ColorSurfaceHigh}"
+                                                Stroke="{StaticResource ColorBorder}"
                                                 StrokeThickness="1"
                                                 StrokeShape="RoundRectangle 8"
                                                 Padding="0">
-                                            <VerticalStackLayout Spacing="0">
-                                                <!-- Thumbnail -->
-                                                <Image Source="{Binding PhotoPath}"
-                                                       HeightRequest="56" WidthRequest="80"
-                                                       Aspect="AspectFill"
-                                                       BackgroundColor="#141414" />
-                                                <!-- Kod + Tür -->
-                                                <VerticalStackLayout Padding="5,4,5,5" Spacing="2">
-                                                    <Label FontSize="10" FontAttributes="Bold"
-                                                           TextColor="{StaticResource ColorTextPrimary}"
-                                                           LineBreakMode="TailTruncation">
-                                                        <Label.FormattedText>
-                                                            <FormattedString>
-                                                                <Span Text="{Binding IskiCode, TargetNullValue=''}"
-                                                                      TextColor="{StaticResource ColorWarning}" />
-                                                                <Span Text=" " />
-                                                                <Span Text="{Binding Type, TargetNullValue='—'}" />
-                                                            </FormattedString>
-                                                        </Label.FormattedText>
-                                                    </Label>
-                                                    <Label Text="{Binding DistanceMeters, StringFormat='{0:0.0} m', TargetNullValue='—'}"
-                                                           FontSize="9" TextColor="{StaticResource ColorTextTertiary}" />
-                                                    <Label Text="{Binding Description}"
-                                                           FontSize="9" TextColor="{StaticResource ColorTextTertiary}"
-                                                           LineBreakMode="TailTruncation"
-                                                           IsVisible="{Binding Description, Converter={StaticResource StringNotEmpty}}" />
+                                            <Border.GestureRecognizers>
+                                                <TapGestureRecognizer
+                                                    Command="{Binding Source={x:Reference PageRoot}, Path=BindingContext.EditPhotoCommentCommand}"
+                                                    CommandParameter="{Binding .}" />
+                                            </Border.GestureRecognizers>
+                                            <Grid>
+                                                <VerticalStackLayout Spacing="0">
+                                                    <!-- Thumbnail -->
+                                                    <Image Source="{Binding PhotoPath}"
+                                                           HeightRequest="62" WidthRequest="96"
+                                                           Aspect="AspectFill"
+                                                           BackgroundColor="{StaticResource ColorSurfaceSubtle}" />
+                                                    <!-- Yorum + meta -->
+                                                    <VerticalStackLayout Padding="6,4,6,6" Spacing="2">
+                                                        <Label Text="{Binding Description, TargetNullValue='(yorum yok)'}"
+                                                               FontSize="10" FontAttributes="Bold"
+                                                               TextColor="{StaticResource ColorTextPrimary}"
+                                                               MaxLines="2"
+                                                               LineBreakMode="TailTruncation" />
+                                                        <Label FontSize="9" TextColor="{StaticResource ColorTextTertiary}">
+                                                            <Label.FormattedText>
+                                                                <FormattedString>
+                                                                    <Span Text="{Binding DistanceMeters, StringFormat='{0:0.0} m  ·  ', TargetNullValue=''}" />
+                                                                    <Span Text="{Binding CreatedAt, StringFormat='{0:HH:mm}'}" />
+                                                                </FormattedString>
+                                                            </Label.FormattedText>
+                                                        </Label>
+                                                    </VerticalStackLayout>
                                                 </VerticalStackLayout>
-                                            </VerticalStackLayout>
+
+                                                <!-- Sil butonu (sağ üst) -->
+                                                <Button Text="✕" FontSize="10"
+                                                        BackgroundColor="#cc000000" TextColor="White"
+                                                        CornerRadius="10" Padding="0"
+                                                        HeightRequest="20" WidthRequest="20"
+                                                        HorizontalOptions="End" VerticalOptions="Start"
+                                                        Margin="0,3,3,0"
+                                                        Command="{Binding Source={x:Reference PageRoot}, Path=BindingContext.DeletePhotoCommand}"
+                                                        CommandParameter="{Binding .}" />
+                                            </Grid>
                                         </Border>
                                     </DataTemplate>
                                 </BindableLayout.ItemTemplate>
@@ -378,7 +442,7 @@
 
                     <!-- Dikey ayırıcı -->
                     <BoxView Grid.Column="0" HorizontalOptions="End" WidthRequest="1"
-                             Color="#2c2c2e" />
+                             Color="{StaticResource ColorBorder}" />
 
                     <!-- ── Sağ: MQTT Broker Paneli ── -->
                     <Grid Grid.Column="1" RowDefinitions="Auto,*" Padding="10,8,10,8" RowSpacing="6">
@@ -387,7 +451,7 @@
                         <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
                             <Label Grid.Column="0" Text="BROKER"
                                    FontSize="10" FontAttributes="Bold" CharacterSpacing="0.5"
-                                   TextColor="#636366" VerticalOptions="Center" />
+                                   TextColor="{StaticResource ColorTextSecondary}" VerticalOptions="Center" />
                             <Label Grid.Column="1"
                                    Text="{Binding Live.IsRobotConnected, Converter={StaticResource BoolToConnectionText}}"
                                    FontSize="10"
@@ -397,14 +461,14 @@
 
                         <!-- MQTT log — kompakt liste -->
                         <Border Grid.Row="1"
-                                Background="#141414" StrokeThickness="1"
-                                Stroke="#2c2c2e"
+                                Background="{StaticResource ColorSurfaceSubtle}" StrokeThickness="1"
+                                Stroke="{StaticResource ColorBorder}"
                                 StrokeShape="RoundRectangle 8"
                                 Padding="0">
                             <CollectionView ItemsSource="{Binding Live.MqttLog}"
                                             VerticalScrollBarVisibility="Never">
                                 <CollectionView.EmptyView>
-                                    <Label Text="Bağlantı bekleniyor" TextColor="#48484a" FontSize="10"
+                                    <Label Text="Bağlantı bekleniyor" TextColor="{StaticResource ColorTextTertiary}" FontSize="10"
                                            HorizontalOptions="Center" Margin="0,10" />
                                 </CollectionView.EmptyView>
                                 <CollectionView.ItemTemplate>
@@ -412,29 +476,29 @@
                                         <Grid Padding="8,2" ColumnDefinitions="38,Auto,*" ColumnSpacing="4">
                                             <Label Grid.Column="0"
                                                    Text="{Binding TimeStr}"
-                                                   FontSize="9" TextColor="#48484a" VerticalOptions="Center" />
+                                                   FontSize="9" TextColor="{StaticResource ColorTextTertiary}" VerticalOptions="Center" />
                                             <Label Grid.Column="1"
                                                    Text="{Binding Label}"
                                                    FontSize="9" FontAttributes="Bold"
                                                    VerticalOptions="Center">
                                                 <Label.Triggers>
                                                     <DataTrigger TargetType="Label" Binding="{Binding Direction}" Value="TX">
-                                                        <Setter Property="TextColor" Value="#0a84ff" />
+                                                        <Setter Property="TextColor" Value="{StaticResource ColorAccent}" />
                                                     </DataTrigger>
                                                     <DataTrigger TargetType="Label" Binding="{Binding Direction}" Value="RX">
-                                                        <Setter Property="TextColor" Value="#30d158" />
+                                                        <Setter Property="TextColor" Value="{StaticResource ColorSuccess}" />
                                                     </DataTrigger>
                                                     <DataTrigger TargetType="Label" Binding="{Binding Direction}" Value="Info">
-                                                        <Setter Property="TextColor" Value="#ff9f0a" />
+                                                        <Setter Property="TextColor" Value="{StaticResource ColorWarning}" />
                                                     </DataTrigger>
                                                     <DataTrigger TargetType="Label" Binding="{Binding Direction}" Value="Error">
-                                                        <Setter Property="TextColor" Value="#ff453a" />
+                                                        <Setter Property="TextColor" Value="{StaticResource ColorDanger}" />
                                                     </DataTrigger>
                                                 </Label.Triggers>
                                             </Label>
                                             <Label Grid.Column="2"
                                                    Text="{Binding Payload}"
-                                                   FontSize="9" TextColor="#8e8e93"
+                                                   FontSize="9" TextColor="{StaticResource ColorTextSecondary}"
                                                    LineBreakMode="TailTruncation"
                                                    VerticalOptions="Center" />
                                         </Grid>

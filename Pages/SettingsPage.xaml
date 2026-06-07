@@ -28,6 +28,23 @@
         <ScrollView Grid.Row="1" Padding="16">
             <VerticalStackLayout Spacing="12" MaximumWidthRequest="720" HorizontalOptions="Start">
 
+                <!-- ============== GÖRÜNÜM / TEMA ============== -->
+                <Border Style="{StaticResource CardBorder}">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="GÖRÜNÜM" Style="{StaticResource SectionTitle}" />
+                        <Grid ColumnDefinitions="*,200" ColumnSpacing="10" VerticalOptions="Center">
+                            <VerticalStackLayout Grid.Column="0" Spacing="2" VerticalOptions="Center">
+                                <Label Text="Tema" Style="{StaticResource Caption}" />
+                                <Label Text="Koyu / Açık / Sistem — anında uygulanır"
+                                       FontSize="10" TextColor="{StaticResource ColorTextTertiary}" />
+                            </VerticalStackLayout>
+                            <Picker Grid.Column="1"
+                                    ItemsSource="{Binding ThemeOptions}"
+                                    SelectedItem="{Binding SelectedTheme}" />
+                        </Grid>
+                    </VerticalStackLayout>
+                </Border>
+
                 <!-- ============== PROJE / KONUM ============== -->
                 <Border Style="{StaticResource CardBorder}">
                     <VerticalStackLayout Spacing="10">

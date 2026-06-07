@@ -13,8 +13,8 @@ public partial class App : Application
     {
         InitializeComponent();
 
-        // Koyu tema sabit — saha kullanımı + Windows 11 Mica koyu malzemesiyle uyumlu.
-        UserAppTheme = AppTheme.Dark;
+        // Kayıtlı tema tercihini uygula (Sistem / Açık / Koyu) — kök sayfa kurulmadan önce.
+        ThemeService.ApplyInitial();
 
         _services = services;
         _auth = auth;
@@ -46,6 +46,17 @@ public partial class App : Application
     {
         // Giriş ekranı devre dışı — uygulama doğrudan ana sayfayla açılır.
         return _services.GetRequiredService<AppShell>();
+    }
+
+    /// <summary>Tema değişince kök sayfayı yeniden kurar — StaticResource renkler yeniden çözülür.</summary>
+    public void RecreateRoot()
+    {
+        if (_window is null) return;
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            try { _window.Page = BuildRootPage(); }
+            catch (Exception ex) { LogCrash("RecreateRoot", ex); }
+        });
     }
 
     private void OnAuthChanged(object? sender, EventArgs e)

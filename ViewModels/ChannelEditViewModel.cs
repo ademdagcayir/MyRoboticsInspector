@@ -17,9 +17,7 @@ public class SiblingChannel
     public bool HasVideo => !string.IsNullOrWhiteSpace(Channel.VideoPath) && File.Exists(Channel.VideoPath);
     public bool IsCurrent { get; init; }
 
-    public string Label => string.IsNullOrWhiteSpace(Channel.ChannelCode)
-        ? $"#{Channel.Id}"
-        : Channel.ChannelCode;
+    public string Label => Channel.DisplayName;
 
     public string Meta
     {
@@ -40,7 +38,14 @@ public partial class ChannelEditViewModel : BaseViewModel
     private readonly DatabaseService _db;
     private readonly ReportService _report;
 
+    /// <summary>Düzenleme açıldığında kanalın sokağı — sokak değişirse klasör taşıma için.</summary>
+    private string? _originalStreet;
+
     public ObservableCollection<SiblingChannel> SiblingChannels { get; } = new();
+
+    /// <summary>Bu projede daha önce tanımlanmış sokak adları (Picker'da seçilebilir).</summary>
+    public ObservableCollection<string> KnownStreets { get; } = new();
+    [ObservableProperty] private string? selectedStreet;
 
     [ObservableProperty] private int channelId;
     [ObservableProperty] private int jobId;
@@ -89,6 +94,49 @@ public partial class ChannelEditViewModel : BaseViewModel
         if (value > 0) _ = LoadAsync();
     }
 
+    partial void OnSelectedStreetChanged(string? value)
+    {
+        // Picker'dan seçilen sokağı forma (Entry) yaz
+        if (!string.IsNullOrWhiteSpace(value) && EditingChannel is not null)
+        {
+            EditingChannel.Street = value;
+            OnPropertyChanged(nameof(EditingChannel));
+        }
+    }
+
+    /// <summary>
+    /// Bu projede daha önce kullanılmış sokakları topla: hem DB'deki kanallardan
+    /// hem de diskteki projeler/{Proje}/{Sokak} klasörlerinden.
+    /// </summary>
+    private async Task LoadKnownStreetsAsync(int forJobId)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var channels = await _db.GetInspectionsAsync(forJobId);
+        foreach (var c in channels)
+            if (!string.IsNullOrWhiteSpace(c.Street))
+                set.Add(c.Street.Trim());
+
+        try
+        {
+            var settings = await _db.GetSettingsAsync();
+            var root = string.IsNullOrWhiteSpace(settings.StoragePath)
+                ? FileSystem.AppDataDirectory
+                : settings.StoragePath;
+            // Yapı: projeler/{Proje}/{Mahalle}/{Sokak} → sokaklar iki seviye altta
+            var projDir = StoragePaths.ProjectDir(root, ParentProject?.Title);
+            if (Directory.Exists(projDir))
+                foreach (var mahalle in Directory.GetDirectories(projDir))
+                    foreach (var sokak in Directory.GetDirectories(mahalle))
+                        set.Add(Path.GetFileName(sokak));
+        }
+        catch { /* disk taranamazsa DB listesi yeterli */ }
+
+        KnownStreets.Clear();
+        foreach (var s in set.OrderBy(s => s, StringComparer.CurrentCultureIgnoreCase))
+            KnownStreets.Add(s);
+    }
+
     partial void OnJobIdChanged(int value)
     {
         // Yeni kanal: jobId var ama channelId yok
@@ -102,6 +150,7 @@ public partial class ChannelEditViewModel : BaseViewModel
         if (existing is null) return;
 
         EditingChannel = existing;
+        _originalStreet = existing.Street;
         IsNew = false;
         ParentProject = await conn.FindAsync<Job>(existing.JobId);
 
@@ -117,6 +166,8 @@ public partial class ChannelEditViewModel : BaseViewModel
         };
 
         Title = $"Kanal {EditingChannel.KanalNo}: {EditingChannel.ChannelCode ?? "—"}";
+        await LoadKnownStreetsAsync(EditingChannel.JobId);
+        SelectedStreet = string.IsNullOrWhiteSpace(EditingChannel.Street) ? null : EditingChannel.Street;
         await LoadSiblingsAsync(EditingChannel.JobId);
     }
 
@@ -125,21 +176,31 @@ public partial class ChannelEditViewModel : BaseViewModel
     {
         var conn = await _db.GetConnectionAsync();
         ParentProject = await conn.FindAsync<Job>(forJobId);
-        EditingChannel = new Inspection { JobId = forJobId };
+        _originalStreet = null;
+        // Mevcut kanalları geriye dönük numaralandır, sonra yeni kanala sıradaki numarayı ver
+        await _db.EnsureKanalNumbersAsync(forJobId);
+        EditingChannel = new Inspection
+        {
+            JobId   = forJobId,
+            KanalNo = await _db.GetNextKanalNoAsync(forJobId)
+        };
         IsNew = true;
         ChannelId = 0;
-        SelectedFlow        = FlowOptions[0];
-        SelectedProjectType = ProjectTypeOptions[0];
+        SelectedFlow        = null;   // zorunlu — kullanıcı bilinçli seçmeli
+        SelectedProjectType = null;   // zorunlu — Atık Su / Yağmur Suyu seçilmeli
         SelectedPipeShape   = PipeShapeOptions[0];
         SelectedViewStart   = ViewStartOptions[0];
         SelectedCleaned     = "Belirsiz";
+        SelectedStreet      = null;
         Title = "Yeni Kanal";
+        await LoadKnownStreetsAsync(forJobId);
         await LoadSiblingsAsync(forJobId);
     }
 
     private async Task LoadSiblingsAsync(int jobId)
     {
         if (jobId <= 0) return;
+        await _db.EnsureKanalNumbersAsync(jobId);
         var channels = await _db.GetInspectionsAsync(jobId);
         SiblingChannels.Clear();
         foreach (var ch in channels.OrderBy(c => c.KanalNo).ThenBy(c => c.ChannelCode))
@@ -152,9 +213,121 @@ public partial class ChannelEditViewModel : BaseViewModel
         }
     }
 
+    /// <summary>
+    /// Kanal açmadan önce zorunlu alanları doğrular: giriş/çıkış bacası, sokak,
+    /// kanal çapı ve akış yönü. Eksikse kullanıcıya bildirir ve false döner.
+    /// </summary>
+    private async Task<bool> ValidateRequiredAsync()
+    {
+        var missing = new List<string>();
+        if (string.IsNullOrWhiteSpace(EditingChannel.EntryManhole)) missing.Add("Giriş bacası");
+        if (string.IsNullOrWhiteSpace(EditingChannel.ExitManhole))  missing.Add("Çıkış bacası");
+        if (string.IsNullOrWhiteSpace(EditingChannel.Street))       missing.Add("Sokak adı");
+
+        var hasDiameter = (EditingChannel.PipeWidthMm is int w && w > 0)
+                          || !string.IsNullOrWhiteSpace(EditingChannel.PipeDiameter);
+        if (!hasDiameter) missing.Add("Kanal çapı");
+
+        if (SelectedFlow is null) missing.Add("Akış yönü");
+        if (SelectedProjectType is null) missing.Add("Proje türü (Atık Su / Yağmur Suyu)");
+
+        if (missing.Count == 0) return true;
+
+        var msg = "Kanal açmak için şu zorunlu alanlar girilmeli:\n\n• " +
+                  string.Join("\n• ", missing);
+        StatusMessage = "Eksik: " + string.Join(", ", missing);
+        await Shell.Current.DisplayAlert("Zorunlu alanlar eksik", msg, "Tamam");
+        return false;
+    }
+
+    /// <summary>
+    /// Sokak adı düzenlendiyse: yeni sokak klasörünü oluştur, varsa videoyu ve resim
+    /// klasörünü taşı, eski sokak klasöründe hiç video kalmadıysa onu sil.
+    /// </summary>
+    private async Task ReconcileStreetFolderAsync()
+    {
+        if (IsNew || ParentProject is null) return;
+
+        var oldStreet = _originalStreet?.Trim();
+        var newStreet = EditingChannel.Street?.Trim();
+        if (string.Equals(oldStreet, newStreet, StringComparison.OrdinalIgnoreCase)) return;
+
+        try
+        {
+            var settings = await _db.GetSettingsAsync();
+            var root = string.IsNullOrWhiteSpace(settings.StoragePath)
+                ? FileSystem.AppDataDirectory
+                : settings.StoragePath;
+
+            var hood = ParentProject.Neighborhood;
+            var oldDir = StoragePaths.StreetDir(root, ParentProject.Title, hood, oldStreet);
+            var fallback = $"kanal_{EditingChannel.KanalNo ?? EditingChannel.Id}";
+
+            // Sokak adı hem klasörde hem dosya adlarında geçtiği için her ikisi de yenilenir.
+            var oldStem = StoragePaths.ChannelStem(EditingChannel.KanalNo, oldStreet,
+                EditingChannel.EntryManhole, EditingChannel.ExitManhole, fallback);
+            var newStem = StoragePaths.ChannelStem(EditingChannel.KanalNo, newStreet,
+                EditingChannel.EntryManhole, EditingChannel.ExitManhole, fallback);
+
+            // ── Video: yeni sokak/video klasörüne taşı + yeniden adlandır + DB güncelle ──
+            if (!string.IsNullOrEmpty(EditingChannel.VideoPath) && File.Exists(EditingChannel.VideoPath))
+            {
+                var newVideoDir = StoragePaths.VideoDir(root, ParentProject.Title, hood, newStreet);
+                Directory.CreateDirectory(newVideoDir);
+                var newVideoPath = Path.Combine(newVideoDir,
+                    StoragePaths.VideoFileName(EditingChannel.KanalNo, newStreet,
+                        EditingChannel.EntryManhole, EditingChannel.ExitManhole, fallback));
+                if (!string.Equals(newVideoPath, EditingChannel.VideoPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (File.Exists(newVideoPath)) { try { File.Delete(newVideoPath); } catch { } }
+                    File.Move(EditingChannel.VideoPath, newVideoPath);
+                    EditingChannel.VideoPath = newVideoPath;
+                    await _db.SaveInspectionAsync(EditingChannel);
+                }
+            }
+
+            // ── Fotoğraflar: yeni sokak/resim klasörüne taşı + yeniden adlandır + DB güncelle ──
+            var newPhotosDir = StoragePaths.PhotosDir(root, ParentProject.Title, hood, newStreet);
+            var photos = await _db.GetDefectsAsync(EditingChannel.Id);
+            foreach (var ph in photos)
+            {
+                if (string.IsNullOrEmpty(ph.PhotoPath) || !File.Exists(ph.PhotoPath)) continue;
+                var fn = Path.GetFileName(ph.PhotoPath);
+                // Dosya adının başındaki eski kanal kökünü yenisiyle değiştir
+                var newFn = fn.StartsWith(oldStem, StringComparison.Ordinal)
+                    ? newStem + fn.Substring(oldStem.Length)
+                    : fn;
+                Directory.CreateDirectory(newPhotosDir);
+                var newPhotoPath = Path.Combine(newPhotosDir, newFn);
+                if (!string.Equals(newPhotoPath, ph.PhotoPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (File.Exists(newPhotoPath)) { try { File.Delete(newPhotoPath); } catch { } }
+                    File.Move(ph.PhotoPath, newPhotoPath);
+                    ph.PhotoPath = newPhotoPath;
+                    await _db.SaveDefectAsync(ph);
+                }
+            }
+
+            // Eski sokak klasöründe hiç video yoksa sil
+            if (Directory.Exists(oldDir) &&
+                !Directory.EnumerateFiles(oldDir, "*.mp4", SearchOption.AllDirectories).Any())
+            {
+                try { Directory.Delete(oldDir, recursive: true); } catch { /* yoksay */ }
+            }
+
+            _originalStreet = newStreet;
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Sokak klasörü güncellenemedi: {ex.Message}";
+        }
+    }
+
     [RelayCommand]
     private async Task SaveAsync()
     {
+        if (!await ValidateRequiredAsync()) return;
+
         EditingChannel.FlowDirection = SelectedFlow?.Value ?? FlowDirection.Downstream;
         EditingChannel.ProjectType   = SelectedProjectType?.Value ?? ProjectType.AtikSu;
         EditingChannel.PipeShape     = SelectedPipeShape?.Value ?? PipeShape.Dairesel;
@@ -170,6 +343,9 @@ public partial class ChannelEditViewModel : BaseViewModel
 
         var savedJobId = EditingChannel.JobId;
         var wasNew     = ChannelId == 0;
+
+        // Düzenleme modunda sokak değiştiyse klasörleri uzlaştır
+        if (!wasNew) await ReconcileStreetFolderAsync();
 
         // Listeyi yenile (kaydedilen kanalı göster)
         await LoadSiblingsAsync(savedJobId);
@@ -192,7 +368,8 @@ public partial class ChannelEditViewModel : BaseViewModel
     [RelayCommand]
     private async Task SaveAndCloseAsync()
     {
-        // Her durumda kaydet ve kapat
+        if (!await ValidateRequiredAsync()) return;
+
         EditingChannel.FlowDirection = SelectedFlow?.Value ?? FlowDirection.Downstream;
         EditingChannel.ProjectType   = SelectedProjectType?.Value ?? ProjectType.AtikSu;
         EditingChannel.PipeShape     = SelectedPipeShape?.Value ?? PipeShape.Dairesel;
@@ -204,6 +381,7 @@ public partial class ChannelEditViewModel : BaseViewModel
             _       => null
         };
         await _db.SaveInspectionAsync(EditingChannel);
+        await ReconcileStreetFolderAsync();
         await Shell.Current.GoToAsync("..");
     }
 
@@ -236,12 +414,12 @@ public partial class ChannelEditViewModel : BaseViewModel
         if (item is null) return;
         try
         {
-            StatusMessage = "Rapor oluşturuluyor…";
-            var dir = Path.GetDirectoryName(item.Channel.VideoPath)
-                      ?? FileSystem.AppDataDirectory;
-            var path = await _report.GenerateInspectionReportAsync(item.Channel.Id, dir);
-            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
-            StatusMessage = "Rapor açıldı";
+            StatusMessage = "Raporlar oluşturuluyor…";
+            var (classic, _) = await _report.GenerateChannelReportsAsync(item.Channel.Id);
+            var dir = Path.GetDirectoryName(classic);
+            if (!string.IsNullOrEmpty(dir))
+                Process.Start(new ProcessStartInfo(dir) { UseShellExecute = true });
+            StatusMessage = "✓ 2 rapor oluşturuldu (rapor/ klasörü)";
         }
         catch (Exception ex) { StatusMessage = $"Rapor hatası: {ex.Message}"; }
     }

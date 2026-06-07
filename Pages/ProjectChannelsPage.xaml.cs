@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using MyRoboticsInspector.ViewModels;
 using SkiaSharp;
 using SkiaSharp.Views.Maui;
@@ -7,12 +8,42 @@ namespace MyRoboticsInspector.Pages;
 public partial class ProjectChannelsPage : ContentPage
 {
     private readonly ProjectChannelsViewModel _vm;
+    private bool _blinking;
 
     public ProjectChannelsPage(ProjectChannelsViewModel vm)
     {
         InitializeComponent();
         BindingContext = _vm = vm;
         ChannelCanvas.PaintSurface += OnPaintSurface;
+        _vm.Live.PropertyChanged += OnLivePropertyChanged;
+    }
+
+    private void OnLivePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(_vm.Live.IsRecording))
+            Dispatcher.Dispatch(UpdateRecBlink);
+    }
+
+    // Kayıt sürerken kırmızı noktayı yanıp söndür; bitince tam görünür bırak.
+    private async void UpdateRecBlink()
+    {
+        if (_vm.Live.IsRecording)
+        {
+            if (_blinking) return;
+            _blinking = true;
+            while (_blinking && _vm.Live.IsRecording)
+            {
+                await RecDot.FadeTo(0.15, 450, Easing.SinInOut);
+                await RecDot.FadeTo(1.0, 450, Easing.SinInOut);
+            }
+            _blinking = false;
+            RecDot.Opacity = 1;
+        }
+        else
+        {
+            _blinking = false;
+            RecDot.Opacity = 1;
+        }
     }
 
     private void OnPipelineFrameReady(object? sender, EventArgs e)

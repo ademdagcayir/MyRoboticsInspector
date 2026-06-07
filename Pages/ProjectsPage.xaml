@@ -84,8 +84,8 @@
                                     <HorizontalStackLayout Grid.Column="1" Spacing="0" VerticalOptions="Start">
                                         <Button Text="+ Kanal"
                                                 FontSize="12" FontAttributes="Bold"
-                                                BackgroundColor="#1a3d2b"
-                                                TextColor="#5ccf8a"
+                                                BackgroundColor="{StaticResource ColorSuccessMuted}"
+                                                TextColor="{StaticResource ColorSuccess}"
                                                 CornerRadius="5"
                                                 HeightRequest="28" Padding="10,0"
                                                 Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ProjectsViewModel}}, Path=AddChannelCommand}"
@@ -98,7 +98,7 @@
                                                 CommandParameter="{Binding .}" />
                                         <Button Text="✕"
                                                 FontSize="12" Background="Transparent"
-                                                TextColor="#555"
+                                                TextColor="{StaticResource ColorTextTertiary}"
                                                 HeightRequest="28" WidthRequest="32" Padding="0"
                                                 Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ProjectsViewModel}}, Path=DeleteCommand}"
                                                 CommandParameter="{Binding .}" />
@@ -130,15 +130,15 @@
                                     <HorizontalStackLayout Grid.Column="0" Spacing="6">
                                         <!-- Aşama badge -->
                                         <Border Padding="8,3"
-                                                Background="#0d2b1a"
+                                                Background="{StaticResource ColorSuccessMuted}"
                                                 StrokeShape="RoundRectangle 4"
                                                 StrokeThickness="0">
                                             <Label Text="{Binding StageLabel}" FontSize="11"
-                                                   TextColor="#5ccf8a" />
+                                                   TextColor="{StaticResource ColorSuccess}" />
                                         </Border>
                                         <!-- Amaç badge -->
                                         <Border Padding="8,3"
-                                                Background="#1a1a2e"
+                                                Background="{StaticResource ColorAccentMuted}"
                                                 StrokeShape="RoundRectangle 4"
                                                 StrokeThickness="0">
                                             <Label Text="{Binding PurposeLabel}" FontSize="11"

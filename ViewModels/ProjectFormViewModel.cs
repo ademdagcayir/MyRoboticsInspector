@@ -131,6 +131,18 @@ public partial class ProjectFormViewModel : BaseViewModel
         EditingProject.Purpose = SelectedPurpose?.Value ?? InspectionPurpose.A;
 
         await _db.SaveJobAsync(EditingProject);
+
+        // Her proje için projeler/{ProjeAdı} klasörünü oluştur (videolar buraya gelecek)
+        try
+        {
+            var settings = await _db.GetSettingsAsync();
+            var root = string.IsNullOrWhiteSpace(settings.StoragePath)
+                ? FileSystem.AppDataDirectory
+                : settings.StoragePath;
+            Directory.CreateDirectory(StoragePaths.ProjectDir(root, EditingProject.Title));
+        }
+        catch { /* klasör oluşturulamazsa kayıt yine de geçerli */ }
+
         StatusMessage = IsNew ? "Proje oluşturuldu" : "Proje kaydedildi";
 
         await Shell.Current.GoToAsync("..");

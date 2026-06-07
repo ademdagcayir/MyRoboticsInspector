@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Text;
@@ -25,6 +26,7 @@ public partial class LiveViewModel : BaseViewModel
     private readonly IGamepadInput _gamepad;
     private readonly GamepadCommandMapper _gamepadMapper;
     private readonly RobotDriveStreamer _drive;
+    private readonly BrokerService _broker;
     private AppSettings? _settings;
     private DateTime? _streamStartedAt;
     private IDispatcherTimer? _elapsedTimer;
@@ -87,6 +89,104 @@ public partial class LiveViewModel : BaseViewModel
 
     [RelayCommand]
     private void ClearMqttLog() => MqttLog.Clear();
+
+    // ===== Büyük alan görünüm seçici (teşhis ekranı): Kamera / MQTT Log / Robot-Pano Konsolu =====
+    public List<string> BigViewOptions { get; } = new() { "Kamera", "MQTT Log", "Robot/Pano Konsolu" };
+    [ObservableProperty] private string bigViewMode = "Kamera";
+    public bool IsBigCamera  => BigViewMode == "Kamera";
+    public bool IsBigMqtt    => BigViewMode == "MQTT Log";
+    public bool IsBigConsole => BigViewMode == "Robot/Pano Konsolu";
+    partial void OnBigViewModeChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsBigCamera));
+        OnPropertyChanged(nameof(IsBigMqtt));
+        OnPropertyChanged(nameof(IsBigConsole));
+    }
+
+    // ===== Cihaz Konsolu (robot/log + pano/log) — uzaktan Serial Monitor =====
+    public ObservableCollection<DeviceLogEntry> DeviceLog { get; } = new();
+    [ObservableProperty] private bool showDeviceConsole = true;
+    private const int DeviceLogMaxEntries = 300;
+
+    [RelayCommand] private void ToggleDeviceConsole() => ShowDeviceConsole = !ShowDeviceConsole;
+    [RelayCommand] private void ClearDeviceLog() => DeviceLog.Clear();
+
+    // ===== Yerel broker (Mosquitto) — uygulama içinden başlat/durdur =====
+    [ObservableProperty] private bool isBrokerRunning;
+
+    [RelayCommand]
+    private async Task ToggleBroker()
+    {
+        if (IsBrokerRunning)
+        {
+            await _broker.StopAsync();
+            StatusMessage = "Broker durduruldu";
+            return;
+        }
+        if (BrokerService.FindMosquitto() is null)
+        {
+            StatusMessage = "Mosquitto kurulu değil — winget install -e --id EclipseFoundation.Mosquitto";
+            return;
+        }
+        StatusMessage = "Broker başlatılıyor...";
+        if (!await _broker.StartAsync())
+        {
+            StatusMessage = "Broker başlatılamadı (port 1883 dolu olabilir)";
+            return;
+        }
+        await Task.Delay(800);          // mosquitto ayağa kalksın
+        await AutoConnectBrokerAsync(); // PC'yi otomatik broker'a bağla
+    }
+
+    [RelayCommand] private Task RunRobotDiagnostics() => RequestDiagnosticsAsync("robot/diag", "Robot");
+    [RelayCommand] private Task RunPanoDiagnostics()  => RequestDiagnosticsAsync("pano/diag", "Pano");
+
+    private async Task RequestDiagnosticsAsync(string topic, string label)
+    {
+        if (_mqtt is null || !_mqtt.IsConnected) { StatusMessage = "Broker bağlı değil"; return; }
+        try
+        {
+            await _mqtt.PublishRawAsync(topic, "1");
+            StatusMessage = $"{label} teşhis istendi — konsola rapor düşecek";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Teşhis gönderilemedi: {ex.Message}";
+        }
+    }
+
+    /// <summary>robot/log ve pano/log topic'lerine abone olur (broker bağlanınca çağrılır).</summary>
+    private async Task SubscribeDeviceLogsAsync()
+    {
+        if (_mqtt is null || !_mqtt.IsConnected) return;
+        try
+        {
+            await _mqtt.SubscribeAsync("robot/log");
+            await _mqtt.SubscribeAsync("pano/log");
+        }
+        catch { /* abone olunamadıysa log gelmez ama akış kritik değil */ }
+    }
+
+    /// <summary>Cihaz log topic'lerinden (robot/log, pano/log) gelen mesajları konsola ekler.</summary>
+    private void OnDeviceMessage(object? sender, MQTTnet.MqttApplicationMessageReceivedEventArgs e)
+    {
+        var topic = e.ApplicationMessage.Topic;
+        string? source = topic switch
+        {
+            "robot/log" => "robot",
+            "pano/log"  => "pano",
+            _ => null
+        };
+        if (source is null) return;
+
+        var msg = System.Text.Encoding.UTF8.GetString(e.ApplicationMessage.Payload.ToArray());
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            DeviceLog.Insert(0, new DeviceLogEntry(DateTime.Now, source, msg)); // en yeni üstte
+            while (DeviceLog.Count > DeviceLogMaxEntries)
+                DeviceLog.RemoveAt(DeviceLog.Count - 1);
+        });
+    }
 
     // Inspection workflow
     public ObservableCollection<Customer> Customers { get; } = new();
@@ -154,13 +254,22 @@ public partial class LiveViewModel : BaseViewModel
                         IRobotProtocol robot,
                         TelemetryService telemetry, DatabaseService db,
                         IGamepadInput gamepad, GamepadCommandMapper gamepadMapper,
-                        RobotDriveStreamer drive)
+                        RobotDriveStreamer drive, BrokerService broker)
     {
         _video = video;
         _sync = sync;
         _pipeline = pipeline;
         _recorder = recorder;
         _recorder.Error += (_, m) => MainThread.BeginInvokeOnMainThread(() => StatusMessage = $"Kayıt: {m}");
+        // Kayıt ffmpeg'i beklenmedik durursa: REC durumunu kapat + kullanıcıyı uyar (sebebi göster)
+        _recorder.RecordingFailed += (_, diag) => MainThread.BeginInvokeOnMainThread(async () =>
+        {
+            _pipeline.ShowRecBadge = false;
+            _pipeline.RecordingStartedAt = null;
+            IsRecording = false;
+            StatusMessage = "⚠ Kayıt beklenmedik şekilde durdu";
+            try { await Shell.Current.DisplayAlert("Kayıt durdu", diag, "Tamam"); } catch { }
+        });
         _robot = robot;
         _mqtt = robot as MqttRobotClient;
         _telemetry = telemetry;
@@ -169,6 +278,8 @@ public partial class LiveViewModel : BaseViewModel
         _gamepadMapper = gamepadMapper;
         _drive = drive;
         _drive.StreamError += (_, msg) => MainThread.BeginInvokeOnMainThread(() => StatusMessage = msg);
+        _broker = broker;
+        _broker.StatusChanged += (_, running) => MainThread.BeginInvokeOnMainThread(() => IsBrokerRunning = running);
         Title = "Canlı Görüntü";
 
         _robot.ConnectionChanged += (_, c) => MainThread.BeginInvokeOnMainThread(() => IsRobotConnected = c);
@@ -176,12 +287,15 @@ public partial class LiveViewModel : BaseViewModel
 
         // MQTT traffic log
         if (_mqtt is not null)
+        {
             _mqtt.TrafficLogged += (_, entry) => MainThread.BeginInvokeOnMainThread(() =>
             {
                 MqttLog.Insert(0, entry); // en yeni üstte
                 while (MqttLog.Count > MqttLogMaxEntries)
                     MqttLog.RemoveAt(MqttLog.Count - 1);
             });
+            _mqtt.MessageReceived += OnDeviceMessage; // robot/log + pano/log → Cihaz Konsolu
+        }
         _video.Error += (_, e) => MainThread.BeginInvokeOnMainThread(() => StatusMessage = e);
 
         // Birleşik senkron pipeline — ilk kare gelince placeholder gizlenir; hata olunca durumu sıfırla
@@ -309,6 +423,7 @@ public partial class LiveViewModel : BaseViewModel
                 _settings.BrokerHost, _settings.BrokerPort,
                 _settings.BrokerUsername, _settings.BrokerPassword);
             await _telemetry.SubscribeAsync();
+            await SubscribeDeviceLogsAsync();
             StatusMessage = "Broker bağlantısı kuruldu";
         }
         catch (Exception ex)
@@ -471,6 +586,7 @@ public partial class LiveViewModel : BaseViewModel
     {
         if (_recorder.IsRecording) await _recorder.StopAsync();
         _pipeline.ShowRecBadge = false;
+        _pipeline.RecordingStartedAt = null;
         _pipeline.Stop();
         _video.Stop();
         IsStreaming = false;
@@ -492,6 +608,7 @@ public partial class LiveViewModel : BaseViewModel
         {
             await _recorder.StopAsync();
             _pipeline.ShowRecBadge = false;
+        _pipeline.RecordingStartedAt = null;
             IsRecording = false;
             if (!string.IsNullOrEmpty(_pipelineRecordFile) && File.Exists(_pipelineRecordFile))
             {
@@ -521,6 +638,7 @@ public partial class LiveViewModel : BaseViewModel
         {
             _pipelineRecordFile = file;
             _pipeline.ShowRecBadge = true;
+            _pipeline.RecordingStartedAt = DateTime.Now; // video zaman sayacı 00:00'dan başlasın
             IsRecording = true;
             _streamStartedAt ??= DateTime.Now;
             StatusMessage = $"● Kayıt: {Path.GetFileName(file)}";
@@ -597,6 +715,7 @@ public partial class LiveViewModel : BaseViewModel
         if (ActiveInspection is null) return;
         if (_recorder.IsRecording) await _recorder.StopAsync();
         _pipeline.ShowRecBadge = false;
+        _pipeline.RecordingStartedAt = null;
         ActiveInspection.FinishedAt = DateTime.Now;
         if (Telemetry.DistanceMeters is double d) ActiveInspection.DistanceMeters = d;
         await _db.SaveInspectionAsync(ActiveInspection);
@@ -754,6 +873,7 @@ public partial class LiveViewModel : BaseViewModel
                 await _mqtt.ConnectAsync(_settings!.BrokerHost, _settings.BrokerPort,
                     _settings.BrokerUsername, _settings.BrokerPassword);
                 await _telemetry.SubscribeAsync();
+                await SubscribeDeviceLogsAsync();
             }
             else
             {
@@ -877,10 +997,14 @@ public partial class LiveViewModel : BaseViewModel
             return;
         }
 
+        // Yeni düzen: {root}/projeler/{ProjeAdı}/{Mahalle}/{Sokak}/video/_{Kanal}_{Sokak}_{GB}_{ÇB}.mp4
         var root = StorageRoot();
-        var dir  = Path.Combine(root, "inspections", channel.Id.ToString());
+        var dir  = StoragePaths.VideoDir(root, project.Title, project.Neighborhood, channel.Street);
         Directory.CreateDirectory(dir);
-        var file = Path.Combine(dir, $"video_{DateTime.Now:yyyyMMdd_HHmmss}.mp4");
+        var file = Path.Combine(dir,
+            StoragePaths.VideoFileName(channel.KanalNo, channel.Street,
+                                       channel.EntryManhole, channel.ExitManhole,
+                                       $"kanal_{channel.KanalNo ?? channel.Id}"));
 
         // Overlay alanlarını kanal bilgisiyle doldur (gömülecek metinler)
         ProjectName = project.Title;
@@ -917,6 +1041,7 @@ public partial class LiveViewModel : BaseViewModel
         {
             _pipelineRecordFile = file;
             _pipeline.ShowRecBadge = true;
+            _pipeline.RecordingStartedAt = DateTime.Now; // video zaman sayacı 00:00'dan başlasın
             IsRecording = true;
             _streamStartedAt ??= DateTime.Now;
             StatusMessage = $"● Kayıt: {channel.ChannelCode ?? $"#{channel.Id}"} → {Path.GetFileName(file)}";
@@ -934,6 +1059,7 @@ public partial class LiveViewModel : BaseViewModel
         {
             await _recorder.StopAsync();
             _pipeline.ShowRecBadge = false;
+        _pipeline.RecordingStartedAt = null;
             if (!string.IsNullOrEmpty(_pipelineRecordFile) && File.Exists(_pipelineRecordFile))
             {
                 LastRecordingPath = _pipelineRecordFile;

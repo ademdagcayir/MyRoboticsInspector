@@ -26,11 +26,19 @@ public sealed class FfmpegOverlayRecorder : IAsyncDisposable
     private string? _nowPath;
     private System.Threading.Timer? _writer;
     private double _recOffsetSeconds = 0.25;
+    private DateTime _startTime;   // video zaman sayacı bundan hesaplanır (00:00'dan)
+
+    private volatile bool _stopping;              // StopAsync ile bilinçli durdurma → çıkış uyarısı verme
+    private readonly Queue<string> _errTail = new(); // ffmpeg stderr son satırları (teşhis için)
+    private readonly object _errLock = new();
 
     public string? OutputPath { get; private set; }
     public bool IsRecording => _proc is { HasExited: false };
     public string? LastError { get; private set; }
     public event EventHandler<string>? Error;
+
+    /// <summary>Kayıt ffmpeg süreci BEKLENMEDİK şekilde (StopAsync olmadan) sonlandığında tetiklenir. Argüman: teşhis metni.</summary>
+    public event EventHandler<string>? RecordingFailed;
 
     public FfmpegOverlayRecorder(TelemetrySyncBuffer sync) => _sync = sync;
 
@@ -81,9 +89,12 @@ public sealed class FfmpegOverlayRecorder : IAsyncDisposable
         WriteAtomic(Path.Combine(_sessionDir, "manhole.txt"), string.Join("    ", baca));
         WriteAtomic(Path.Combine(_sessionDir, "flow.txt"),
             string.IsNullOrWhiteSpace(model.FlowText) ? "" : $"Akış yönü: {model.FlowText}");
-        // Dinamik (timer yazar)
-        WriteAtomic(_meterPath, "");
-        WriteAtomic(_nowPath, DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss"));
+        // Dinamik (timer yazar) — video zaman sayacı 00:00'dan.
+        // NOT: reload=1 ile ffmpeg her karede okur → paylaşımlı yazma (WriteShared) kullanılır,
+        // atomik rename DEĞİL (rename Windows'ta okuma anında 'Permission denied' → ffmpeg -13 ile ölür).
+        _startTime = DateTime.Now;
+        WriteShared(_meterPath, " ");
+        WriteShared(_nowPath, "00:00");
 
         // Filtre script — komut-satırı escape cehennemini bypass eder
         int h = videoHeight > 0 ? videoHeight : 2160;
@@ -108,15 +119,24 @@ public sealed class FfmpegOverlayRecorder : IAsyncDisposable
         };
         try
         {
+            _stopping = false;
+            lock (_errLock) _errTail.Clear();
+
             _proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
             _proc.ErrorDataReceived += (_, e) =>
             {
                 if (e.Data is null) return;
                 LastError = e.Data;
+                lock (_errLock)
+                {
+                    _errTail.Enqueue(e.Data);
+                    while (_errTail.Count > 40) _errTail.Dequeue();
+                }
                 if (e.Data.Contains("Connection refused") || e.Data.Contains("No route") ||
                     e.Data.Contains("Could not") || e.Data.Contains("Invalid data"))
                     Error?.Invoke(this, MaskCreds(e.Data));
             };
+            _proc.Exited += OnProcExited;
             _proc.Start();
             ChildProcessReaper.Register(_proc);
             _proc.BeginErrorReadLine();
@@ -134,8 +154,41 @@ public sealed class FfmpegOverlayRecorder : IAsyncDisposable
         }
     }
 
+    /// <summary>ffmpeg süreci kendiliğinden sonlandı. Bilinçli durdurma değilse kullanıcıyı uyar.</summary>
+    private void OnProcExited(object? sender, EventArgs e)
+    {
+        if (_stopping) return; // StopAsync zaten durduruyor — beklenen çıkış
+        _writer?.Dispose(); _writer = null;
+
+        int code = -1;
+        try { if (_proc is not null) code = _proc.ExitCode; } catch { }
+
+        string tail;
+        lock (_errLock) tail = string.Join("\n", _errTail);
+        if (string.IsNullOrWhiteSpace(tail)) tail = "(ffmpeg stderr boş)";
+
+        // Tam logu videonun yanına yaz (oturum klasörü temizlenecek)
+        string? logPath = null;
+        try
+        {
+            if (!string.IsNullOrEmpty(OutputPath))
+            {
+                logPath = OutputPath + "_ffmpeg_hata.log";
+                File.WriteAllText(logPath, $"Çıkış kodu: {code}\n\n{tail}\n");
+            }
+        }
+        catch { }
+
+        var msg = $"Kayıt beklenmedik şekilde durdu (ffmpeg çıkış kodu {code}).\n\n" +
+                  "FFmpeg son satırlar:\n" + MaskCreds(tail) +
+                  (logPath is not null ? $"\n\nTam log: {logPath}" : "");
+
+        RecordingFailed?.Invoke(this, msg);
+    }
+
     public async Task StopAsync()
     {
+        _stopping = true;
         _writer?.Dispose(); _writer = null;
         if (_proc is not null)
         {
@@ -176,9 +229,8 @@ public sealed class FfmpegOverlayRecorder : IAsyncDisposable
         c.Add($"drawtext=textfile='{Tf("location.txt")}':reload=0:expansion=none:fontfile='{fr}':x={pad}:y={y}:fontsize={fBody}:fontcolor=white:{Box()}"); y += (int)(fBody * 1.7);
         c.Add($"drawtext=textfile='{Tf("manhole.txt")}':reload=0:expansion=none:fontfile='{fr}':x={pad}:y={y}:fontsize={fBody}:fontcolor=white:{Box()}"); y += (int)(fBody * 1.7);
         c.Add($"drawtext=textfile='{Tf("flow.txt")}':reload=0:expansion=none:fontfile='{fr}':x={pad}:y={y}:fontsize={fBody}:fontcolor=0x64D2FF:{Box()}");
-        // Üst-sağ: saat + REC
+        // Üst-sağ: saat (REC damgası kaldırıldı — kaydedilen videoda istenmiyor)
         c.Add($"drawtext=textfile='{Tf("now.txt")}':reload=1:expansion=none:fontfile='{fr}':x=w-tw-{pad}:y={pad}:fontsize={fBody}:fontcolor=white:{Box()}");
-        c.Add($"drawtext=text='● REC':expansion=none:fontfile='{fb}':x=w-tw-{pad}:y={pad + (int)(fBody * 1.9)}:fontsize={fBody}:fontcolor=0xFF3B30:{Box()}");
         // Alt-sol: büyük metre
         c.Add($"drawtext=textfile='{Tf("meter.txt")}':reload=1:expansion=none:fontfile='{fb}':x={pad}:y=h-{fMeter + pad}:fontsize={fMeter}:fontcolor=0xFFD60A:{Box()}");
 
@@ -247,11 +299,20 @@ public sealed class FfmpegOverlayRecorder : IAsyncDisposable
         {
             var m = _sync.MetersAt(_sync.NowSeconds - _recOffsetSeconds);
             if (m is double v && _meterPath is not null)             // BOŞ değer → son metreyi koru (flicker yok)
-                WriteAtomic(_meterPath, v.ToString("0.00", CultureInfo.InvariantCulture) + " m");
+                WriteShared(_meterPath, v.ToString("0.00", CultureInfo.InvariantCulture) + " m");
             if (_nowPath is not null)
-                WriteAtomic(_nowPath, DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss"));
+                WriteShared(_nowPath, FormatClock(DateTime.Now - _startTime));
         }
         catch { }
+    }
+
+    /// <summary>Video zaman sayacı: 00:00 (60 dk üstünde sa:dk:sn).</summary>
+    private static string FormatClock(TimeSpan t)
+    {
+        if (t < TimeSpan.Zero) t = TimeSpan.Zero;
+        return t.TotalHours >= 1
+            ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}"
+            : $"{t.Minutes:00}:{t.Seconds:00}";
     }
 
     private static void WriteAtomic(string path, string content)
@@ -263,6 +324,29 @@ public sealed class FfmpegOverlayRecorder : IAsyncDisposable
             File.Move(tmp, path, overwrite: true);                    // NTFS atomik rename
         }
         catch { }
+    }
+
+    /// <summary>
+    /// drawtext reload=1 dosyaları için GÜVENLİ yazma: rename YOK, paylaşımlı (FileShare.ReadWrite)
+    /// yerinde yazma. Böylece ffmpeg aynı anda okurken 'Permission denied' (-13) almaz ve
+    /// dosya hiçbir an boş kalmaz (OpenOrCreate + üzerine yaz + SetLength, Create değil).
+    /// </summary>
+    private static void WriteShared(string path, string content)
+    {
+        var bytes = new UTF8Encoding(false).GetBytes(content);
+        for (int attempt = 0; attempt < 8; attempt++)
+        {
+            try
+            {
+                using var fs = new FileStream(path, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite);
+                fs.Write(bytes, 0, bytes.Length);
+                fs.SetLength(bytes.Length);   // eski uzun içerik kalıntısını kırp (yazımdan SONRA → boş an yok)
+                fs.Flush();
+                return;
+            }
+            catch (IOException) { Thread.Sleep(1); }
+            catch (UnauthorizedAccessException) { Thread.Sleep(1); }
+        }
     }
 
     // drawtext filtergraph yol kaçışı: \ → /, : → \:

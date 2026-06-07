@@ -49,6 +49,13 @@ public sealed class SyncedVideoPipeline : IAsyncDisposable
     /// <summary>Önizleme overlay'inde REC rozeti göster (kayıt FfmpegOverlayRecorder'da olduğu için VM kontrol eder).</summary>
     public bool ShowRecBadge { get; set; }
 
+    /// <summary>Kayıt başlangıç anı — overlay'deki video zaman sayacı (00:00'dan) bundan hesaplanır. Kayıt yokken null.</summary>
+    public DateTime? RecordingStartedAt { get; set; }
+
+    /// <summary>Kayıt başından bu yana geçen süre (video zamanı). Kayıt yoksa null.</summary>
+    public TimeSpan? RecordingElapsed
+        => RecordingStartedAt is DateTime t ? DateTime.Now - t : (TimeSpan?)null;
+
     /// <summary>Overlay verisi. Statik alanları VM doldurur; Meters her karede senkron seçilir.</summary>
     public VideoOverlayModel Overlay { get; } = new();
 
@@ -257,15 +264,28 @@ public sealed class SyncedVideoPipeline : IAsyncDisposable
     }
 
     /// <summary>En son composite kareyi (overlay dahil) JPEG olarak döner — snapshot için.</summary>
+    /// <remarks>
+    /// KRİTİK: JPEG encode (4K'da ~150ms) kilit DIŞINDA yapılır. Kilit yalnızca hızlı bir
+    /// kopya (memcpy) için tutulur. Aksi hâlde encode boyunca <see cref="_frameLock"/> tutulur,
+    /// okuyucu thread'i (ComposeFrame) bloklanır, decode-ffmpeg'in stdout pipe'ı dolar ve
+    /// CANLI GÖRÜNTÜ DONAR. Bu, "resim çekince kayıt/önizleme dondu" hatasının köküydü.
+    /// </remarks>
     public byte[]? Snapshot()
     {
+        SKBitmap? copy;
         lock (_frameLock)
         {
             if (_current is null) return null;
-            using var img = SKImage.FromBitmap(_current);
+            copy = _current.Copy();   // hızlı: sadece bellek kopyası, encode YOK
+        }
+        if (copy is null) return null;
+        try
+        {
+            using var img = SKImage.FromBitmap(copy);
             using var data = img.Encode(SKEncodedImageFormat.Jpeg, 92);
             return data?.ToArray();
         }
+        finally { copy.Dispose(); }
     }
 
     /// <summary>UI thread'inde çağrılır: en son kareyi verilen canvas'a (hedef boyuta) çizer.</summary>
@@ -397,9 +417,9 @@ public sealed class SyncedVideoPipeline : IAsyncDisposable
 
         if (_w == 0) { _w = bmp.Width; _h = bmp.Height; }
 
-        // Overlay: senkron metre + statik alanlar + saat
+        // Overlay: senkron metre + statik alanlar + video zaman sayacı (duvar saati DEĞİL)
         Overlay.Meters = _sync.MetersAt(captureAppTime);
-        Overlay.NowText = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss");
+        Overlay.NowText = FormatVideoClock(RecordingElapsed);
         Overlay.IsRecording = ShowRecBadge;
 
         try
@@ -421,6 +441,16 @@ public sealed class SyncedVideoPipeline : IAsyncDisposable
         lock (_frameLock) { old = _current; _current = bmp; }
         old?.Dispose();
         FrameReady?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Video zaman sayacı: 00:00 formatı (60 dk üstünde sa:dk:sn). Kayıt yoksa 00:00.</summary>
+    public static string FormatVideoClock(TimeSpan? elapsed)
+    {
+        var t = elapsed ?? TimeSpan.Zero;
+        if (t < TimeSpan.Zero) t = TimeSpan.Zero;
+        return t.TotalHours >= 1
+            ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}"
+            : $"{t.Minutes:00}:{t.Seconds:00}";
     }
 
     private static int Find(byte[] d, int from, int len, byte a, byte b)
