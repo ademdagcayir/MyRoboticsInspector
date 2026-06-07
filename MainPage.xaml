@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" ?>
+﻿<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:MyRoboticsInspector.ViewModels"
@@ -413,31 +413,15 @@
                           </VerticalStackLayout>
                       </Border>
 
-                      <CollectionView Grid.Row="2" ItemsSource="{Binding MqttLog}"
-                                      ItemsUpdatingScrollMode="KeepItemsInView"
-                                      VerticalScrollBarVisibility="Always">
-                          <CollectionView.EmptyView>
-                              <Label Text="Henüz mesaj yok — broker'a bağlan" TextColor="#8A8F9C"
-                                     FontSize="12" HorizontalOptions="Center" Margin="0,24" />
-                          </CollectionView.EmptyView>
-                          <CollectionView.ItemTemplate>
-                              <DataTemplate x:DataType="services:MqttLogEntry">
-                                  <Grid Padding="8,3" ColumnDefinitions="70,58,150,*" ColumnSpacing="8">
-                                      <Label Grid.Column="0" Text="{Binding TimeStr}" FontSize="10" TextColor="#8A8F9C" />
-                                      <Label Grid.Column="1" Text="{Binding Label}" FontSize="10" FontAttributes="Bold"
-                                             TextColor="{StaticResource ColorCyan}" />
-                                      <Label Grid.Column="2" Text="{Binding Topic}" FontSize="10" TextColor="#8A8F9C"
-                                             LineBreakMode="TailTruncation" />
-                                      <Label Grid.Column="3" Text="{Binding Payload}" FontSize="11" TextColor="White"
-                                             FontFamily="OpenSansRegular" LineBreakMode="TailTruncation" />
-                                  </Grid>
-                              </DataTemplate>
-                          </CollectionView.ItemTemplate>
-                      </CollectionView>
+                      <!-- TEK-METİN terminal (en yeni üstte) — titremez -->
+                      <ScrollView Grid.Row="2" VerticalScrollBarVisibility="Always">
+                          <Label Text="{Binding MqttConsoleText}" FontSize="11" TextColor="#D6FFE6"
+                                 FontFamily="OpenSansRegular" LineBreakMode="NoWrap" />
+                      </ScrollView>
                   </Grid>
 
                   <!-- ===== ROBOT / PANO KONSOLU (büyük görünüm) ===== -->
-                  <Grid IsVisible="{Binding IsBigConsole}" RowDefinitions="Auto,*" Padding="14" RowSpacing="8">
+                  <Grid IsVisible="{Binding IsBigConsole}" RowDefinitions="Auto,Auto,*" Padding="14" RowSpacing="8">
                       <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
                           <Label Grid.Column="0" Text="CİHAZ KONSOLU" TextColor="White"
                                  FontAttributes="Bold" FontSize="15" VerticalOptions="Center" />
@@ -448,28 +432,31 @@
                           <Button Grid.Column="3" Text="🗑" Style="{StaticResource QuietButton}"
                                   Padding="10,4" Command="{Binding ClearDeviceLogCommand}" />
                       </Grid>
-                      <CollectionView Grid.Row="1" ItemsSource="{Binding DeviceLog}"
-                                      ItemsUpdatingScrollMode="KeepItemsInView"
-                                      VerticalScrollBarVisibility="Always">
-                          <CollectionView.EmptyView>
-                              <Label Text="Cihaz logu yok — Robot/Pano Teşhis'e bas" TextColor="#8A8F9C"
-                                     FontSize="12" HorizontalOptions="Center" Margin="0,24" />
-                          </CollectionView.EmptyView>
-                          <CollectionView.ItemTemplate>
-                              <DataTemplate x:DataType="m:DeviceLogEntry">
-                                  <Grid Padding="8,3" ColumnDefinitions="70,56,*" ColumnSpacing="8">
-                                      <Label Grid.Column="0" Text="{Binding TimeStr}" FontSize="10" TextColor="#8A8F9C" />
-                                      <Border Grid.Column="1" Padding="4,1" StrokeThickness="0"
-                                              StrokeShape="RoundRectangle 3" BackgroundColor="{Binding SourceColor}"
-                                              VerticalOptions="Center" HorizontalOptions="Start">
-                                          <Label Text="{Binding SourceLabel}" FontSize="8" FontAttributes="Bold" TextColor="White" />
-                                      </Border>
-                                      <Label Grid.Column="2" Text="{Binding Message}" FontSize="11" TextColor="White"
-                                             FontFamily="OpenSansRegular" />
-                                  </Grid>
-                              </DataTemplate>
-                          </CollectionView.ItemTemplate>
-                      </CollectionView>
+
+                      <!-- CİHAZ DURUMU — teşhisten gelen değerler YERİNDE güncellenir (kaymaz/titremez) -->
+                      <Border Grid.Row="1" BackgroundColor="#11161F" StrokeThickness="0"
+                              StrokeShape="RoundRectangle 8" Padding="12,10">
+                          <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="3">
+                              <Label Grid.Row="0" Grid.Column="0" Text="Sürüş" FontSize="11" TextColor="#8A8F9C" />
+                              <Label Grid.Row="0" Grid.Column="1" Text="{Binding RobotDriveStatus}" FontSize="13" FontAttributes="Bold"
+                                     TextColor="{StaticResource ColorCyan}" FontFamily="OpenSansRegular" />
+                              <Label Grid.Row="1" Grid.Column="0" Text="Kafa" FontSize="11" TextColor="#8A8F9C" />
+                              <Label Grid.Row="1" Grid.Column="1" Text="{Binding RobotHeadStatus}" FontSize="13" TextColor="White"
+                                     FontFamily="OpenSansRegular" />
+                              <Label Grid.Row="2" Grid.Column="0" Text="Son komut" FontSize="11" TextColor="#8A8F9C" />
+                              <Label Grid.Row="2" Grid.Column="1" Text="{Binding RobotSinceStatus}" FontSize="12" TextColor="#B8BDC9"
+                                     FontFamily="OpenSansRegular" />
+                              <Label Grid.Row="3" Grid.Column="0" Text="Uptime" FontSize="11" TextColor="#8A8F9C" />
+                              <Label Grid.Row="3" Grid.Column="1" Text="{Binding RobotUptimeStatus}" FontSize="12" TextColor="#B8BDC9"
+                                     FontFamily="OpenSansRegular" />
+                          </Grid>
+                      </Border>
+
+                      <!-- TEK-METİN terminal (en yeni üstte) — titremez -->
+                      <ScrollView Grid.Row="2" VerticalScrollBarVisibility="Always">
+                          <Label Text="{Binding DeviceConsoleText}" FontSize="11" TextColor="#D6E4FF"
+                                 FontFamily="OpenSansRegular" LineBreakMode="NoWrap" />
+                      </ScrollView>
                   </Grid>
                 </Grid>
             </Border>
@@ -497,6 +484,17 @@
         <!-- ============== RIGHT PANEL ============== -->
         <ScrollView Grid.Row="0" Grid.Column="1">
             <VerticalStackLayout Spacing="10">
+
+                    <!-- ============== MARKA / LOGO ============== -->
+                    <HorizontalStackLayout Spacing="10" HorizontalOptions="Center" Margin="0,2,0,2">
+                        <Border BackgroundColor="#FFFFFF" StrokeThickness="0" StrokeShape="RoundRectangle 22"
+                                HeightRequest="44" WidthRequest="44" VerticalOptions="Center">
+                            <Image Source="logo.png" HeightRequest="34" WidthRequest="34" Aspect="AspectFit"
+                                   HorizontalOptions="Center" VerticalOptions="Center" />
+                        </Border>
+                        <Label Text="My Robotics" FontSize="19" FontAttributes="Bold"
+                               TextColor="{StaticResource ColorTextPrimary}" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
 
                     <!-- ============== ÇEVRE BİRİMLERİ (online/offline) ============== -->
                     <Border Style="{StaticResource CardBorder}">
@@ -702,42 +700,13 @@
                                         Command="{Binding RunPanoDiagnosticsCommand}" />
                             </Grid>
 
-                            <!-- Konsol listesi (aç/kapat) -->
+                            <!-- Konsol (tek-metin terminal, en yeni üstte → titremez) -->
                             <Border Background="{StaticResource ColorSurfaceSubtle}" StrokeThickness="0" StrokeShape="RoundRectangle 6"
-                                    Padding="0" IsVisible="{Binding ShowDeviceConsole}">
-                                <CollectionView ItemsSource="{Binding DeviceLog}"
-                                                HeightRequest="240"
-                                                ItemsUpdatingScrollMode="KeepItemsInView"
-                                                VerticalScrollBarVisibility="Always">
-                                    <CollectionView.EmptyView>
-                                        <Label Text="Cihaz logu yok — robot/pano bağlanınca akmaya başlar"
-                                               TextColor="{StaticResource ColorTextTertiary}" FontSize="11"
-                                               HorizontalOptions="Center" Margin="0,16" />
-                                    </CollectionView.EmptyView>
-                                    <CollectionView.ItemTemplate>
-                                        <DataTemplate x:DataType="m:DeviceLogEntry">
-                                            <Grid Padding="8,3" ColumnDefinitions="50,46,*" ColumnSpacing="6">
-                                                <!-- Zaman -->
-                                                <Label Grid.Column="0" Text="{Binding TimeStr}"
-                                                       FontSize="9" TextColor="{StaticResource ColorTextTertiary}"
-                                                       VerticalOptions="Center" />
-                                                <!-- Kaynak rozeti -->
-                                                <Border Grid.Column="1" Padding="4,1" StrokeThickness="0"
-                                                        StrokeShape="RoundRectangle 3"
-                                                        BackgroundColor="{Binding SourceColor}"
-                                                        VerticalOptions="Center" HorizontalOptions="Start">
-                                                    <Label Text="{Binding SourceLabel}" FontSize="8" FontAttributes="Bold"
-                                                           TextColor="White" />
-                                                </Border>
-                                                <!-- Mesaj -->
-                                                <Label Grid.Column="2" Text="{Binding Message}"
-                                                       FontSize="11" TextColor="{StaticResource ColorTextPrimary}"
-                                                       FontFamily="OpenSansRegular"
-                                                       VerticalOptions="Center" />
-                                            </Grid>
-                                        </DataTemplate>
-                                    </CollectionView.ItemTemplate>
-                                </CollectionView>
+                                    Padding="8,6" IsVisible="{Binding ShowDeviceConsole}">
+                                <ScrollView HeightRequest="240" VerticalScrollBarVisibility="Always">
+                                    <Label Text="{Binding DeviceConsoleText}" FontSize="10" TextColor="{StaticResource ColorTextPrimary}"
+                                           FontFamily="OpenSansRegular" LineBreakMode="NoWrap" />
+                                </ScrollView>
                             </Border>
                         </VerticalStackLayout>
                     </Border>
@@ -783,72 +752,13 @@
                                 </Button>
                             </Grid>
 
-                            <!-- Log listesi (aç/kapat) -->
+                            <!-- Log (tek-metin terminal, en yeni üstte → titremez) -->
                             <Border Background="{StaticResource ColorSurfaceSubtle}" StrokeThickness="0" StrokeShape="RoundRectangle 6"
-                                    Padding="0" IsVisible="{Binding ShowMqttLog}">
-                                <CollectionView ItemsSource="{Binding MqttLog}"
-                                                HeightRequest="260"
-                                                ItemsUpdatingScrollMode="KeepItemsInView"
-                                                VerticalScrollBarVisibility="Always">
-                                    <CollectionView.EmptyView>
-                                        <Label Text="Henüz mesaj yok — broker'a bağlan"
-                                               TextColor="{StaticResource ColorTextTertiary}" FontSize="11"
-                                               HorizontalOptions="Center" Margin="0,16" />
-                                    </CollectionView.EmptyView>
-                                    <CollectionView.ItemTemplate>
-                                        <DataTemplate x:DataType="services:MqttLogEntry">
-                                            <Grid Padding="8,4" ColumnDefinitions="56,70,*" ColumnSpacing="6"
-                                                  RowDefinitions="Auto,Auto">
-                                                <!-- Zaman -->
-                                                <Label Grid.Row="0" Grid.Column="0"
-                                                       Text="{Binding TimeStr}"
-                                                       FontSize="9" TextColor="{StaticResource ColorTextTertiary}"
-                                                       VerticalOptions="Start" />
-                                                <!-- Yön etiketi -->
-                                                <Label Grid.Row="0" Grid.Column="1"
-                                                       Text="{Binding Label}"
-                                                       FontSize="10" FontAttributes="Bold"
-                                                       VerticalOptions="Start">
-                                                    <Label.Triggers>
-                                                        <DataTrigger TargetType="Label"
-                                                                     Binding="{Binding Direction}"
-                                                                     Value="TX">
-                                                            <Setter Property="TextColor" Value="{StaticResource ColorCyan}" />
-                                                        </DataTrigger>
-                                                        <DataTrigger TargetType="Label"
-                                                                     Binding="{Binding Direction}"
-                                                                     Value="RX">
-                                                            <Setter Property="TextColor" Value="{StaticResource ColorSuccess}" />
-                                                        </DataTrigger>
-                                                        <DataTrigger TargetType="Label"
-                                                                     Binding="{Binding Direction}"
-                                                                     Value="Info">
-                                                            <Setter Property="TextColor" Value="{StaticResource ColorWarning}" />
-                                                        </DataTrigger>
-                                                        <DataTrigger TargetType="Label"
-                                                                     Binding="{Binding Direction}"
-                                                                     Value="Error">
-                                                            <Setter Property="TextColor" Value="{StaticResource ColorDanger}" />
-                                                        </DataTrigger>
-                                                    </Label.Triggers>
-                                                </Label>
-                                                <!-- Topic -->
-                                                <Label Grid.Row="0" Grid.Column="2"
-                                                       Text="{Binding Topic}"
-                                                       FontSize="9" TextColor="{StaticResource ColorTextTertiary}"
-                                                       LineBreakMode="TailTruncation"
-                                                       VerticalOptions="Start" />
-                                                <!-- Payload -->
-                                                <Label Grid.Row="1" Grid.ColumnSpan="3"
-                                                       Text="{Binding Payload}"
-                                                       FontSize="11" TextColor="{StaticResource ColorTextPrimary}"
-                                                       FontFamily="OpenSansRegular"
-                                                       LineBreakMode="TailTruncation"
-                                                       Margin="0,0,0,4" />
-                                            </Grid>
-                                        </DataTemplate>
-                                    </CollectionView.ItemTemplate>
-                                </CollectionView>
+                                    Padding="8,6" IsVisible="{Binding ShowMqttLog}">
+                                <ScrollView HeightRequest="260" VerticalScrollBarVisibility="Always">
+                                    <Label Text="{Binding MqttConsoleText}" FontSize="10" TextColor="{StaticResource ColorTextPrimary}"
+                                           FontFamily="OpenSansRegular" LineBreakMode="NoWrap" />
+                                </ScrollView>
                             </Border>
                         </VerticalStackLayout>
                     </Border>

@@ -101,7 +101,7 @@
     </Shell.FlyoutHeader>
 
     <!-- ════════ NAVİGASYON ════════ -->
-    <FlyoutItem Title="Canlı Görüntü">
+    <FlyoutItem Title="Kontrol Paneli">
         <ShellContent ContentTemplate="{DataTemplate local:MainPage}" Route="live" />
     </FlyoutItem>
 

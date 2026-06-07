@@ -13,10 +13,15 @@
             <VerticalStackLayout Spacing="24" MaximumWidthRequest="480" HorizontalOptions="Center" VerticalOptions="Center">
 
                 <!-- Hero / branding -->
-                <VerticalStackLayout Spacing="4" Margin="0,0,0,16">
-                    <Label Text="🛰️" FontSize="48" HorizontalOptions="Center" />
+                <VerticalStackLayout Spacing="8" Margin="0,0,0,16">
+                    <Border BackgroundColor="#FFFFFF" StrokeThickness="0"
+                            StrokeShape="RoundRectangle 64"
+                            HeightRequest="128" WidthRequest="128" HorizontalOptions="Center">
+                        <Image Source="logo.png" HeightRequest="96" WidthRequest="96"
+                               Aspect="AspectFit" HorizontalOptions="Center" VerticalOptions="Center" />
+                    </Border>
                     <Label Text="My Robotics" FontSize="32" FontAttributes="Bold"
-                           TextColor="{StaticResource ColorTextPrimary}" HorizontalOptions="Center" />
+                           TextColor="{StaticResource ColorTextPrimary}" HorizontalOptions="Center" Margin="0,8,0,0" />
                     <Label Text="Kanal Görüntüleme Sistemi" FontSize="13"
                            TextColor="{StaticResource ColorTextSecondary}" HorizontalOptions="Center" />
                 </VerticalStackLayout>

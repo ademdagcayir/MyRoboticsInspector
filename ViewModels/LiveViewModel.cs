@@ -88,7 +88,11 @@ public partial class LiveViewModel : BaseViewModel
     private void ToggleMqttLog() => ShowMqttLog = !ShowMqttLog;
 
     [RelayCommand]
-    private void ClearMqttLog() => MqttLog.Clear();
+    private void ClearMqttLog()
+    {
+        lock (_mqttLines) _mqttLines.Clear();
+        MqttConsoleText = "";
+    }
 
     // ===== Büyük alan görünüm seçici (teşhis ekranı): Çevre Birimleri / Kamera / MQTT Log / Robot-Pano Konsolu =====
     public List<string> BigViewOptions { get; } = new() { "Çevre Birimleri", "Kamera", "MQTT Log", "Robot/Pano Konsolu" };
@@ -203,7 +207,70 @@ public partial class LiveViewModel : BaseViewModel
     private const int DeviceLogMaxEntries = 300;
 
     [RelayCommand] private void ToggleDeviceConsole() => ShowDeviceConsole = !ShowDeviceConsole;
-    [RelayCommand] private void ClearDeviceLog() => DeviceLog.Clear();
+    [RelayCommand] private void ClearDeviceLog()
+    {
+        lock (_deviceLines) _deviceLines.Clear();
+        DeviceConsoleText = "";
+    }
+
+    // ===== CİHAZ DURUMU (canlı, yerinde güncellenen panel) =====
+    // Teşhis raporundaki anahtar değerler burada YERİNDE tazelenir (kaymaz).
+    [ObservableProperty] private string robotDriveStatus  = "—";   // Sürüş: ileri/geri=.. sag/sol=.. fren=..
+    [ObservableProperty] private string robotHeadStatus   = "—";   // Kafa: 180=.. 360=.. Işık=..
+    [ObservableProperty] private string robotSinceStatus  = "—";   // Son sürüş komutundan beri
+    [ObservableProperty] private string robotUptimeStatus = "—";   // Uptime
+
+    // ===== CMD/TERMİNAL akışı — TEK METİN (CollectionView değil → titremez) =====
+    // Satırlar tampona yazılır, metin ~160 ms'de bir TOPLU tazelenir (tek Text güncellemesi).
+    // En yeni satır EN ÜSTTE (kaydırma gerekmez, hep görünür). cmd gibi akar.
+    private readonly List<string> _deviceLines = new();
+    private readonly List<string> _mqttLines = new();
+    private bool _deviceDirty, _mqttDirty;
+    private int _consoleFlushTick;
+    private const int ConsoleMaxLines = 200;
+    [ObservableProperty] private string deviceConsoleText = "";
+    [ObservableProperty] private string mqttConsoleText = "";
+
+    private void EnqueueDeviceLine(string source, string msg)
+    {
+        var line = $"{DateTime.Now:HH:mm:ss}  {source,-5}  {msg}";
+        lock (_deviceLines)
+        {
+            _deviceLines.Insert(0, line);                 // en yeni üstte
+            if (_deviceLines.Count > ConsoleMaxLines) _deviceLines.RemoveAt(_deviceLines.Count - 1);
+        }
+        _deviceDirty = true;
+    }
+
+    private void EnqueueMqttLine(MqttLogEntry e)
+    {
+        var line = $"{e.TimeStr}  {e.Label,-5}  {e.Topic,-26}  {e.Payload}";
+        lock (_mqttLines)
+        {
+            _mqttLines.Insert(0, line);
+            if (_mqttLines.Count > ConsoleMaxLines) _mqttLines.RemoveAt(_mqttLines.Count - 1);
+        }
+        _mqttDirty = true;
+    }
+
+    /// <summary>100 ms timer'dan çağrılır — konsol metinlerini kısıtlı hızda (≈160 ms) toplu tazeler.</summary>
+    private void FlushConsolesIfDirty()
+    {
+        if (++_consoleFlushTick < 2) return;  // ~200 ms
+        _consoleFlushTick = 0;
+        if (_deviceDirty)
+        {
+            _deviceDirty = false;
+            string text; lock (_deviceLines) text = string.Join("\n", _deviceLines);
+            DeviceConsoleText = text;
+        }
+        if (_mqttDirty)
+        {
+            _mqttDirty = false;
+            string text; lock (_mqttLines) text = string.Join("\n", _mqttLines);
+            MqttConsoleText = text;
+        }
+    }
 
     // ===== Yerel broker (Mosquitto) — uygulama içinden başlat/durdur =====
     [ObservableProperty] private bool isBrokerRunning;
@@ -349,15 +416,35 @@ public partial class LiveViewModel : BaseViewModel
         if (source is null) return;
 
         var msg = System.Text.Encoding.UTF8.GetString(e.ApplicationMessage.Payload.ToArray());
-        if (source == "pano")       _lastPanoAt  = DateTime.Now;   // pano canlılık işareti
-        else if (source == "robot") _lastRobotAt = DateTime.Now;   // robot canlılık işareti (log/diag)
+        if (source == "robot") { _lastRobotAt = DateTime.Now; ParseRobotDiagLine(msg); } // canlılık + durum paneli
+        else                   { _lastPanoAt  = DateTime.Now; }
+
         MainThread.BeginInvokeOnMainThread(() =>
         {
-            if (source == "pano") LastPanoMessage = msg;
-            else if (source == "robot") LastRobotMessage = msg;
-            DeviceLog.Insert(0, new DeviceLogEntry(DateTime.Now, source, msg)); // en yeni üstte
-            while (DeviceLog.Count > DeviceLogMaxEntries)
-                DeviceLog.RemoveAt(DeviceLog.Count - 1);
+            if (source == "robot") LastRobotMessage = msg; else LastPanoMessage = msg;
+        });
+
+        // Tek-metin terminal tamponuna yaz (timer kısıtlı hızda tazeler → titremez, cmd gibi akar)
+        EnqueueDeviceLine(source.ToUpperInvariant(), msg);
+    }
+
+    /// <summary>Robot teşhis raporu satırlarından anahtar değerleri "Cihaz Durumu" paneline yansıtır.</summary>
+    private void ParseRobotDiagLine(string m)
+    {
+        m = m.Trim();
+        string? drive = null, head = null, since = null, uptime = null;
+        if (m.StartsWith("Surus:", StringComparison.OrdinalIgnoreCase))         drive  = m.Substring(6).Trim();
+        else if (m.StartsWith("Kafa:", StringComparison.OrdinalIgnoreCase))     head   = m.Substring(5).Trim();
+        else if (m.StartsWith("Son surus", StringComparison.OrdinalIgnoreCase)) since  = m;
+        else if (m.StartsWith("Uptime:", StringComparison.OrdinalIgnoreCase))   uptime = m.Substring(7).Trim();
+        else return;
+
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            if (drive  is not null) RobotDriveStatus  = drive;
+            if (head   is not null) RobotHeadStatus   = head;
+            if (since  is not null) RobotSinceStatus  = since;
+            if (uptime is not null) RobotUptimeStatus = uptime;
         });
     }
 
@@ -453,7 +540,7 @@ public partial class LiveViewModel : BaseViewModel
         _drive.StreamError += (_, msg) => MainThread.BeginInvokeOnMainThread(() => StatusMessage = msg);
         _broker = broker;
         _broker.StatusChanged += (_, running) => MainThread.BeginInvokeOnMainThread(() => IsBrokerRunning = running);
-        Title = "Canlı Görüntü";
+        Title = "Kontrol Paneli";
 
         _robot.ConnectionChanged += (_, c) => MainThread.BeginInvokeOnMainThread(() => IsRobotConnected = c);
         _robot.ErrorOccurred += (_, e) => MainThread.BeginInvokeOnMainThread(() => StatusMessage = e);
@@ -461,12 +548,14 @@ public partial class LiveViewModel : BaseViewModel
         // MQTT traffic log
         if (_mqtt is not null)
         {
-            _mqtt.TrafficLogged += (_, entry) => MainThread.BeginInvokeOnMainThread(() =>
+            _mqtt.TrafficLogged += (_, entry) =>
             {
-                MqttLog.Insert(0, entry); // en yeni üstte
-                while (MqttLog.Count > MqttLogMaxEntries)
-                    MqttLog.RemoveAt(MqttLog.Count - 1);
-            });
+                // MQTT trafik = ham izleme: komut TX + telemetri RX + robot/pano log RX hepsi görünür.
+                // Yalnızca saniyelik 'alive' heartbeat'i gizle (gürültü; canlılık göstergesi zaten var).
+                var t = entry.Topic;
+                if (t is "robot/alive" or "pano/alive") return;
+                EnqueueMqttLine(entry);  // tek-metin terminal tamponu (timer tazeler → titremez)
+            };
             _mqtt.MessageReceived += OnDeviceMessage; // robot/log + pano/log → Cihaz Konsolu
         }
         _video.Error += (_, e) => MainThread.BeginInvokeOnMainThread(() => StatusMessage = e);
@@ -697,6 +786,8 @@ public partial class LiveViewModel : BaseViewModel
                     if (IsPanoDiagPolling)  _ = RequestDiagnosticsAsync("pano/diag", "Pano");
                 }
             }
+
+            FlushConsolesIfDirty();               // konsol metinlerini kısıtlı hızda toplu tazele
 
             GamepadDiag = _gamepad.SlotSummary;   // XInput slot teşhisi (her tick)
             var s = _gamepad.CurrentState;

@@ -186,7 +186,7 @@ public class NavGlyphConverter : IValueConverter
     {
         ushort code = (value as string) switch
         {
-            "Canlı Görüntü" => 0xE714, // Video
+            "Kontrol Paneli" => 0xE714, // Video / kontrol paneli
             "Projeler"      => 0xE8B7, // Folder
             "İncelemeler"   => 0xE8A5, // Document
             "Müşteriler"    => 0xE716, // People
