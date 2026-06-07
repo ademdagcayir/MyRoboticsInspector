@@ -117,13 +117,24 @@ public partial class LiveViewModel : BaseViewModel
     private DateTime? _lastPanoAt;
     private DateTime? _lastRobotAt;   // robot/log + robot/diag cevabı da canlılık işareti
 
-    /// <summary>Joystick sökülüp takıldığında elle yeniden bağlama.</summary>
+    /// <summary>Joystick sökülüp takıldığında elle yeniden bağlama — taze tarama + sonuç bildirimi.</summary>
     [RelayCommand]
-    private void ReconnectGamepad()
+    private async Task ReconnectGamepad()
     {
-        DisableGamepad();
-        EnableGamepad();
-        StatusMessage = "Joystick yeniden bağlanıyor…";
+        StatusMessage = "🎮 Joystick yeniden taranıyor…";
+        DisableGamepad();                 // poll'u durdur
+        await Task.Delay(200);            // XInput slotları serbest kalsın
+        EnableGamepad();                  // StartPolling slot kilidini sıfırlar → taze tarama
+        await Task.Delay(1000);           // tarama otursun (30 Hz)
+
+        if (_gamepad.CurrentState.IsConnected)
+        {
+            StatusMessage = "🎮 Joystick bağlandı.";
+        }
+        else
+        {
+            StatusMessage = "Joystick bulunamadı — USB dongle'ı çıkar/tak, F710'u 'X' moduna al, bir tuşa bas.";
+        }
     }
 
     /// <summary>Broker'a (yerel başlat + ) elle yeniden bağlanma.</summary>

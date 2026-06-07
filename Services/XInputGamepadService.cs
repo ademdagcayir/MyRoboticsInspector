@@ -43,6 +43,7 @@ public class XInputGamepadService : IGamepadInput
                 IsPolling = false;
                 return;
             }
+            _activeSlot = -1;   // taze tarama: eski slot kilidini sıfırla (yeniden bağlamada şart)
             _cts = new CancellationTokenSource();
             IsPolling = true;
             _loopTask = Task.Run(() => PollLoop(_cts.Token));
