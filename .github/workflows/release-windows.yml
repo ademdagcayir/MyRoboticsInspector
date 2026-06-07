@@ -11,6 +11,10 @@ on:
         required: true
         default: '1.0.1'
 
+# GitHub Release oluşturmak için GITHUB_TOKEN'a yazma izni gerekir (aksi hâlde 403)
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
