@@ -22,6 +22,18 @@ public class XInputGamepadService : IGamepadInput
     public bool IsPolling { get; private set; }
     public GamepadState CurrentState { get; private set; } = GamepadState.Disconnected;
 
+    /// <summary>
+    /// Gerçek bağlantı durumu (dwPacketNumber watchdog). Disconnected / Live / Stale.
+    /// SUCCESS + paket donmuş + veri tam nötr ≥ StaleSeconds → Stale (kumanda uyuyor).
+    /// </summary>
+    public GamepadLink Link { get; private set; } = GamepadLink.Disconnected;
+    public event EventHandler<GamepadLink>? LinkChanged;
+
+    // dwPacketNumber watchdog durumu
+    private uint _lastPacket;
+    private DateTime _lastPacketChangeUtc = DateTime.UtcNow;
+    private const double StaleSeconds = 3.0; // bu kadar süre paket donmuş + nötr ise "uyuyor"
+
     /// <summary>Teşhis: hangi XInput slotları bağlı + seçilen slot (UI'da gösterilir).</summary>
     public string SlotSummary { get; private set; } = "slot —  ·  0:✗ 1:✗ 2:✗ 3:✗";
 
@@ -43,7 +55,9 @@ public class XInputGamepadService : IGamepadInput
                 IsPolling = false;
                 return;
             }
-            _activeSlot = -1;   // taze tarama: eski slot kilidini sıfırla (yeniden bağlamada şart)
+            _activeSlot = -1;                       // taze tarama: eski slot kilidini sıfırla
+            _lastPacket = 0;                         // paket watchdog'unu sıfırla
+            _lastPacketChangeUtc = DateTime.UtcNow;
             _cts = new CancellationTokenSource();
             IsPolling = true;
             _loopTask = Task.Run(() => PollLoop(_cts.Token));
@@ -63,6 +77,13 @@ public class XInputGamepadService : IGamepadInput
         try { cts?.Cancel(); } catch { }
         try { loop?.Wait(500); } catch { }
         cts?.Dispose();
+
+        // Poll durdu → bağlantı durumlarını sıfırla
+        if (Link != GamepadLink.Disconnected)
+        {
+            Link = GamepadLink.Disconnected;
+            LinkChanged?.Invoke(this, GamepadLink.Disconnected);
+        }
     }
 
     private async Task PollLoop(CancellationToken ct)
@@ -74,19 +95,48 @@ public class XInputGamepadService : IGamepadInput
         while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
         {
             GamepadState curr, rawCurr;
+            uint packet;
             try
             {
-                (curr, rawCurr) = ReadAnyController();
+                (curr, rawCurr, packet) = ReadAnyController();
             }
             catch
             {
                 curr = rawCurr = GamepadState.Disconnected;
+                packet = 0;
             }
 
             if (curr.IsConnected != prev.IsConnected)
             {
                 IsConnected = curr.IsConnected;
                 ConnectionChanged?.Invoke(this, curr.IsConnected);
+            }
+
+            // ===== dwPacketNumber WATCHDOG — gerçek canlılık (Live / Stale / Disconnected) =====
+            // XInput SUCCESS yalnızca "slot bağlı" demek; F710 dongle'ı takılıyken kumanda uyusa
+            // bile SUCCESS + hepsi 0 döner. Paket ilerlemiyorsa VE ham veri tam nötrse (drift bile
+            // yok) ≥ StaleSeconds → kumanda uyuyor/ölü. Herhangi bir girdi/paket → anında Live.
+            GamepadLink newLink;
+            if (!curr.IsConnected)
+            {
+                newLink = GamepadLink.Disconnected;
+                _lastPacket = packet;
+                _lastPacketChangeUtc = DateTime.UtcNow;
+            }
+            else
+            {
+                if (packet != _lastPacket) { _lastPacket = packet; _lastPacketChangeUtc = DateTime.UtcNow; }
+                bool rawNeutral = rawCurr.ButtonsDown == GamepadButton.None
+                    && Math.Abs(rawCurr.LeftStickX)  < 0.02f && Math.Abs(rawCurr.LeftStickY)  < 0.02f
+                    && Math.Abs(rawCurr.RightStickX) < 0.02f && Math.Abs(rawCurr.RightStickY) < 0.02f
+                    && rawCurr.LeftTrigger < 0.02f && rawCurr.RightTrigger < 0.02f;
+                bool frozen = (DateTime.UtcNow - _lastPacketChangeUtc).TotalSeconds >= StaleSeconds;
+                newLink = (rawNeutral && frozen) ? GamepadLink.Stale : GamepadLink.Live;
+            }
+            if (newLink != Link)
+            {
+                Link = newLink;
+                LinkChanged?.Invoke(this, newLink);
             }
 
             // Buton press/release edge detection
@@ -199,17 +249,18 @@ public class XInputGamepadService : IGamepadInput
     // Hayalet/birden çok XInput slotu olduğunda, GERÇEK kumandayı (girdi üreten) kilitleriz.
     private int _activeSlot = -1;
 
-    private (GamepadState filtered, GamepadState raw) ReadAnyController()
+    private (GamepadState filtered, GamepadState raw, uint packet) ReadAnyController()
     {
         var filtered = new GamepadState[4];
         var raw      = new GamepadState[4];
+        var pkt      = new uint[4];
         var conn     = new bool[4];
         int firstConn = -1, moving = -1;
 
         for (int idx = 0; idx < 4; idx++)
         {
-            var (f, r) = ReadController(idx);
-            filtered[idx] = f; raw[idx] = r; conn[idx] = r.IsConnected;
+            var (f, r, p) = ReadController(idx);
+            filtered[idx] = f; raw[idx] = r; pkt[idx] = p; conn[idx] = r.IsConnected;
             if (!r.IsConnected) continue;
             if (firstConn < 0) firstConn = idx;
 
@@ -246,19 +297,19 @@ public class XInputGamepadService : IGamepadInput
 
         SlotSummary = $"slot {(chosen < 0 ? "—" : chosen.ToString())}  ·  0:{Mark(conn[0])} 1:{Mark(conn[1])} 2:{Mark(conn[2])} 3:{Mark(conn[3])}";
 
-        if (chosen < 0) return (GamepadState.Disconnected, GamepadState.Disconnected);
-        return (filtered[chosen], raw[chosen]);
+        if (chosen < 0) return (GamepadState.Disconnected, GamepadState.Disconnected, 0u);
+        return (filtered[chosen], raw[chosen], pkt[chosen]);
     }
 
     private static string Mark(bool b) => b ? "✓" : "✗";
 
-    private static (GamepadState filtered, GamepadState raw) ReadController(int idx)
+    private static (GamepadState filtered, GamepadState raw, uint packet) ReadController(int idx)
     {
         var state = new XINPUT_STATE();
         var res = TryXInput(idx, ref state);
         const int ERROR_SUCCESS = 0;
         if (res != ERROR_SUCCESS)
-            return (GamepadState.Disconnected, GamepadState.Disconnected);
+            return (GamepadState.Disconnected, GamepadState.Disconnected, 0u);
 
         var g = state.Gamepad;
 
@@ -296,7 +347,7 @@ public class XInputGamepadService : IGamepadInput
         // Ham — dead zone uygulanmamış, debug görüntüsü için
         var raw = new GamepadState(true, lx, ly, rx, ry, lt, rt, buttons);
 
-        return (filtered, raw);
+        return (filtered, raw, state.dwPacketNumber);
     }
 
     private static float Normalize(short v)

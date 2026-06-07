@@ -117,24 +117,39 @@ public partial class LiveViewModel : BaseViewModel
     private DateTime? _lastPanoAt;
     private DateTime? _lastRobotAt;   // robot/log + robot/diag cevabı da canlılık işareti
 
-    /// <summary>Joystick sökülüp takıldığında elle yeniden bağlama — taze tarama + sonuç bildirimi.</summary>
+    /// <summary>
+    /// Joystick yeniden bağlama. Sıra: (1) hayalet/hatalı F710 PnP düğümü varsa donanım onarımını
+    /// (hayalet temizliği + cihaz yeniden kurulumu) yükseltilmiş çalıştırır — USB çıkar/tak/reboot
+    /// dansının yazılım karşılığı; (2) poll'u taze tarama ile yeniden başlatır; (3) sonucu bildirir.
+    /// Onarım yalnızca GERÇEKTEN gerektiğinde (hayalet/hata var) UAC ister — temizse istemez.
+    /// </summary>
     [RelayCommand]
     private async Task ReconnectGamepad()
     {
         StatusMessage = "🎮 Joystick yeniden taranıyor…";
         DisableGamepad();                 // poll'u durdur
-        await Task.Delay(200);            // XInput slotları serbest kalsın
-        EnableGamepad();                  // StartPolling slot kilidini sıfırlar → taze tarama
-        await Task.Delay(1000);           // tarama otursun (30 Hz)
 
-        if (_gamepad.CurrentState.IsConnected)
+        // (1) Donanım onarımı — yalnızca hayalet/hatalı düğüm varsa (yükseltilmiş, arka planda)
+        string repairNote = "";
+        try
         {
-            StatusMessage = "🎮 Joystick bağlandı.";
+            if (GamepadRepair.IsSupported && await GamepadRepair.NeedsRepairAsync())
+            {
+                StatusMessage = "🔧 Joystick donanımı onarılıyor (yönetici izni gerekebilir)…";
+                repairNote = " " + await GamepadRepair.RunElevatedAsync();
+            }
         }
-        else
-        {
-            StatusMessage = "Joystick bulunamadı — USB dongle'ı çıkar/tak, F710'u 'X' moduna al, bir tuşa bas.";
-        }
+        catch { /* onarım başarısız olsa bile normal yeniden taramaya devam */ }
+
+        // (2) Taze tarama (StartPolling slot kilidini sıfırlar)
+        await Task.Delay(300);
+        EnableGamepad();
+        await Task.Delay(1200);           // tarama otursun (30 Hz)
+
+        // (3) Sonuç
+        StatusMessage = _gamepad.CurrentState.IsConnected
+            ? $"🎮 Joystick bağlandı.{repairNote}"
+            : $"Joystick bulunamadı — F710'u 'X' moduna al, bir tuşa bas.{repairNote}";
     }
 
     /// <summary>Broker'a (yerel başlat + ) elle yeniden bağlanma.</summary>
@@ -685,16 +700,26 @@ public partial class LiveViewModel : BaseViewModel
 
             GamepadDiag = _gamepad.SlotSummary;   // XInput slot teşhisi (her tick)
             var s = _gamepad.CurrentState;
+            var link = _gamepad.Link;             // gerçek canlılık: Live / Stale / Disconnected
 
-            // Canlı bağlantı durumunu yansıt (ConnectionChanged event'i kaçsa bile dot doğru olsun)
-            if (IsGamepadConnected != s.IsConnected)
+            // "Bağlı" (yeşil) = slot bağlı olduğu sürece korunur. Boşta-ama-canlı kumanda
+            // (merkez stick, tuşa basılmıyor) BAĞLI sayılır → yeşil DÜŞMEZ. "Stale" yalnızca
+            // yumuşak bir ipucu metnidir (uyuyor olabilir), bağlantıyı KESMEZ. Gerçek kopuşta
+            // (XInput device-not-connected) link=Disconnected olur ve dot griye döner.
+            bool connected = link != GamepadLink.Disconnected;
+            if (IsGamepadConnected != connected)
+                IsGamepadConnected = connected;
+
+            string newStatus = link switch
             {
-                IsGamepadConnected = s.IsConnected;
-                GamepadStatusText = s.IsConnected
-                    ? (IsGamepadActive ? "🎮 Joystick: Aktif" : "🎮 Joystick: Bağlı (kapalı)")
-                    : "🎮 Joystick: Yok";
-            }
+                GamepadLink.Live  => IsGamepadActive ? "🎮 Joystick: Aktif" : "🎮 Joystick: Bağlı (kapalı)",
+                GamepadLink.Stale => "🎮 Joystick: Bağlı (boşta — hareket bekleniyor)",
+                _                 => "🎮 Joystick: Yok",
+            };
+            if (GamepadStatusText != newStatus)
+                GamepadStatusText = newStatus;
 
+            // Yalnızca GERÇEK kopuşta ham değerleri sıfırla (boşta-canlı kumandada zaten ~0).
             if (!s.IsConnected)
             {
                 // Bağlı değil → değerleri sıfırla (eski veri ekranda kalmasın)

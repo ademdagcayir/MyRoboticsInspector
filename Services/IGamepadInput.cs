@@ -7,8 +7,19 @@ namespace MyRoboticsInspector.Services;
 /// </summary>
 public interface IGamepadInput : IDisposable
 {
-    /// <summary>Şu an aktif (slot 0) bir gamepad bağlı mı.</summary>
+    /// <summary>Şu an aktif (slot 0) bir gamepad bağlı mı (XInput slot SUCCESS).</summary>
     bool IsConnected { get; }
+
+    /// <summary>
+    /// Gerçek bağlantı durumu. XInput'ta SUCCESS yalnızca "slot bağlı" demektir, "veri akıyor"
+    /// demek DEĞİLDİR — F710 dongle'ı takılıyken kumanda uyusa bile SUCCESS döner (hepsi 0).
+    /// dwPacketNumber watchdog'u ile gerçek durum: Disconnected / Live / Stale (alıcı bağlı,
+    /// kumanda uyanmıyor). Varsayılan: IsConnected'e göre türetilmiş (Live/Disconnected).
+    /// </summary>
+    GamepadLink Link => IsConnected ? GamepadLink.Live : GamepadLink.Disconnected;
+
+    /// <summary>Link durumu değişince bildirim (Live ↔ Stale ↔ Disconnected).</summary>
+    event EventHandler<GamepadLink>? LinkChanged;
 
     /// <summary>Poll loop çalışıyor mu (StartPolling/StopPolling ile kontrol).</summary>
     bool IsPolling { get; }
@@ -34,6 +45,19 @@ public interface IGamepadInput : IDisposable
 
     void StartPolling();
     void StopPolling();
+}
+
+/// <summary>
+/// Gamepad gerçek bağlantı durumu (dwPacketNumber watchdog ile belirlenir).
+/// </summary>
+public enum GamepadLink
+{
+    /// <summary>Slot bağlı değil (XInput ERROR_DEVICE_NOT_CONNECTED).</summary>
+    Disconnected,
+    /// <summary>Bağlı ve veri akıyor (paket ilerliyor / ham girdi var).</summary>
+    Live,
+    /// <summary>Alıcı bağlı ama kumanda uyuyor/ölü — paket donmuş + veri tam nötr. "Bir tuşa basın".</summary>
+    Stale,
 }
 
 [Flags]
