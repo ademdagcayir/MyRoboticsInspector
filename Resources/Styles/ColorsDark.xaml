@@ -41,4 +41,9 @@
     <Color x:Key="ColorHighlight">#FFD60A</Color>
     <Color x:Key="ColorCyan">#64D2FF</Color>
 
+    <!-- MARKA ALTINI (HMA pervane logosu) -->
+    <Color x:Key="ColorGold">#C6A15B</Color>
+    <Color x:Key="ColorGoldSoft">#DDB97A</Color>
+    <Color x:Key="ColorGoldMuted">#2E2718</Color>
+
 </ResourceDictionary>

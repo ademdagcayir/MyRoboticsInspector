@@ -33,7 +33,17 @@ public partial class InspectionDetailViewModel : BaseViewModel
 
     partial void OnInspectionIdChanged(int value)
     {
-        if (value > 0) _ = LoadAsync();
+        if (value > 0) SafeLoad();
+    }
+
+    /// <summary>Fire-and-forget LoadAsync'i güvenle çalıştırır — hata sessizce kaybolmaz.</summary>
+    private async void SafeLoad()
+    {
+        try { await LoadAsync(); }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Yükleme hatası: {ex.Message}";
+        }
     }
 
     public async Task LoadAsync()

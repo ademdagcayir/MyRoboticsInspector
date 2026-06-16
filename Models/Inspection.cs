@@ -77,6 +77,14 @@ public class Inspection
     public double? DistanceMeters { get; set; }
     public string? Notes { get; set; }
 
+    // ----- Bulut etiketleme: bu kanalı KİM, HANGİ ROBOT'la, HANGİ CİHAZ'da kaydetti -----
+    // Kayıt başladığı anda AppSettings + cihaz kimliğinden DONDURULUR (sonradan ayar
+    // değişse bile bu kanalın kime/hangi robota ait olduğu korunur). Bulut tarafında
+    // tek firma hesabı içinde cihaz/operatör/robot ayrımı bu alanlarla yapılır.
+    [MaxLength(120)] public string? OperatorName { get; set; }
+    [MaxLength(80)] public string? RobotId { get; set; }
+    [MaxLength(40)] public string? DeviceId { get; set; }
+
     /// <summary>
     /// Ekranda gösterilecek kanal adı: "Kanal 1", varsa belediye kodu da eklenir
     /// ("Kanal 1 · YK3697A"). KanalNo yoksa koda, o da yoksa Id'ye düşer.

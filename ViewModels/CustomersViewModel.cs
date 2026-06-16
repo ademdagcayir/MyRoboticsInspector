@@ -79,7 +79,26 @@ public partial class CustomersViewModel : BaseViewModel
     private async Task DeleteAsync(Customer? customer)
     {
         if (customer is null) return;
+
+        // Müşteriye bağlı proje varsa silmeyi engelle — projeler öksüz CustomerId ile kalmasın.
+        var jobs = await _db.GetJobsAsync(customer.Id);
+        if (jobs.Count > 0)
+        {
+            await Shell.Current.DisplayAlert(
+                "Silinemiyor",
+                $"\"{customer.Name}\" müşterisine bağlı {jobs.Count} proje var.\nÖnce bu projeleri silin veya başka müşteriye taşıyın.",
+                "Tamam");
+            return;
+        }
+
+        var confirmed = await Shell.Current.DisplayAlert(
+            "Müşteriyi sil",
+            $"\"{customer.Name}\" silinsin mi?\n\nBu işlem geri alınamaz.",
+            "Sil", "Vazgeç");
+        if (!confirmed) return;
+
         await _db.DeleteCustomerAsync(customer);
+        StatusMessage = "Müşteri silindi";
         await LoadAsync();
     }
 }

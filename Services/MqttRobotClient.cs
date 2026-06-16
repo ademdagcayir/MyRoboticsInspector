@@ -1,6 +1,5 @@
 using System.Buffers;
 using System.Text;
-using System.Text.Json;
 using MQTTnet;
 using MQTTnet.Protocol;
 using MyRoboticsInspector.Models;
@@ -32,10 +31,14 @@ public record MqttLogEntry(
 /// Topics (assuming TopicPrefix="myrobotics", RobotId="robot1"):
 ///   PC -> robot: myrobotics/robot1/cmd               (JSON command)
 ///   robot -> PC: myrobotics/robot1/telemetry         (handled by TelemetryService)
-///   robot -> PC: myrobotics/robot1/status (retain)   (online/offline; LWT publishes "offline")
+///   robot -> PC: myrobotics/robot1/status (retain)   (online/offline)
 ///
-/// Safety: a Last Will & Testament (LWT) publishes an emergency STOP command to the cmd topic
-/// if the PC disconnects unexpectedly — the robot firmware must subscribe and act on it.
+/// Safety: a Last Will & Testament (LWT) publishes brake=1 to the bare firmware topic
+/// (joystick/brake) if the PC disconnects unexpectedly — the firmware reads it via atoi()
+/// and locks the drive motors (same as SendAsync's Stop path). Known limitation: MQTT allows
+/// a single will per connection and the camera-head topics (180_up_down / 360_CW_CCW) have
+/// no firmware watchdog, so head motion is NOT fail-safed on PC loss until the firmware
+/// extends its watchdog to the head topics.
 /// </summary>
 public class MqttRobotClient : IRobotProtocol
 {
@@ -50,6 +53,13 @@ public class MqttRobotClient : IRobotProtocol
     private string? _lastUser;
     private string? _lastPass;
 
+    // İstenen abonelik seti — CleanSession nedeniyle broker her kopuşta abonelikleri
+    // unutur; ConnectedAsync her bağlanışta bu seti replay eder. Kasıtlı kesmede de
+    // TEMİZLENMEZ: üst katmanlar (örn. TelemetryService'in "_subscribedTopic" guard'ı)
+    // elle kopar/bağlan döngüsünde tekrar abone olmayabilir, set sayesinde telemetri
+    // ve log abonelikleri her bağlantıda kendiliğinden geri kurulur.
+    private readonly HashSet<string> _subscriptions = new();
+
     public bool IsConnected => _client.IsConnected;
 
     public event EventHandler<bool>? ConnectionChanged;
@@ -63,11 +73,26 @@ public class MqttRobotClient : IRobotProtocol
         var factory = new MqttClientFactory();
         _client = factory.CreateMqttClient();
 
-        _client.ConnectedAsync += _ =>
+        _client.ConnectedAsync += async _ =>
         {
+            // CleanSession ile bağlanıldığı için broker kopuşta TÜM abonelikleri siler —
+            // istenen topic'lere yeniden abone ol (ConnectionChanged'den ÖNCE: dinleyiciler
+            // "bağlandı" gördüğünde telemetri/log akışı hazır olsun).
+            string[] topics;
+            lock (_subscriptions) topics = _subscriptions.ToArray();
+            foreach (var topic in topics)
+            {
+                try
+                {
+                    await _client.SubscribeAsync(topic, MqttQualityOfServiceLevel.AtLeastOnce);
+                }
+                catch (Exception ex)
+                {
+                    Log(MqttLogDirection.Error, topic, $"Yeniden abone olunamadı: {ex.Message}");
+                }
+            }
             ConnectionChanged?.Invoke(this, true);
             Log(MqttLogDirection.Info, "broker", "Bağlantı kuruldu");
-            return Task.CompletedTask;
         };
         _client.DisconnectedAsync += async args =>
         {
@@ -122,13 +147,13 @@ public class MqttRobotClient : IRobotProtocol
 
     public async Task ConnectAsync(string host, int port, CancellationToken ct = default)
     {
-        var willPayload = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { cmd = "Stop", reason = "pc_disconnected" }));
-
+        // LWT: PC beklenmedik koparsa broker, firmware'in GERÇEKTEN dinlediği bare topic'e
+        // brake=1 yayınlar (atoi formatı — JSON değil) → sürüş motorları kilitlenir.
         var options = new MqttClientOptionsBuilder()
             .WithTcpServer(host, port)
             .WithClientId($"pc-{Environment.MachineName}-{Guid.NewGuid().ToString("N")[..6]}")
-            .WithWillTopic(_cmdTopic)
-            .WithWillPayload(willPayload)
+            .WithWillTopic(FirmwareTopics.Brake)
+            .WithWillPayload(Encoding.UTF8.GetBytes("1"))
             .WithWillQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
             .WithCleanSession()
             .WithKeepAlivePeriod(TimeSpan.FromSeconds(15))
@@ -147,13 +172,13 @@ public class MqttRobotClient : IRobotProtocol
 
     public async Task ConnectAsync(string host, int port, string? username, string? password, CancellationToken ct = default)
     {
-        var willPayload = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { cmd = "Stop", reason = "pc_disconnected" }));
-
+        // LWT: PC beklenmedik koparsa broker, firmware'in GERÇEKTEN dinlediği bare topic'e
+        // brake=1 yayınlar (atoi formatı — JSON değil) → sürüş motorları kilitlenir.
         var builder = new MqttClientOptionsBuilder()
             .WithTcpServer(host, port)
             .WithClientId($"pc-{Environment.MachineName}-{Guid.NewGuid().ToString("N")[..6]}")
-            .WithWillTopic(_cmdTopic)
-            .WithWillPayload(willPayload)
+            .WithWillTopic(FirmwareTopics.Brake)
+            .WithWillPayload(Encoding.UTF8.GetBytes("1"))
             .WithWillQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
             .WithCleanSession()
             .WithKeepAlivePeriod(TimeSpan.FromSeconds(15));
@@ -188,7 +213,14 @@ public class MqttRobotClient : IRobotProtocol
 
     public async Task SubscribeAsync(string topic, CancellationToken ct = default)
     {
-        if (!_client.IsConnected) return;
+        // Topic'i bağlı olunmasa bile sete ekle — ConnectedAsync bağlanınca replay eder.
+        lock (_subscriptions) _subscriptions.Add(topic);
+        if (!_client.IsConnected)
+        {
+            // Sessizce yutma: çağıran "abone oldum" sanmasın (SendAsync/PublishRawAsync ile aynı sözleşme).
+            Log(MqttLogDirection.Error, topic, "Abone olunamadı — broker'a bağlı değil");
+            throw new InvalidOperationException("Broker'a bağlı değil.");
+        }
         await _client.SubscribeAsync(topic, MqttQualityOfServiceLevel.AtLeastOnce, ct);
     }
 

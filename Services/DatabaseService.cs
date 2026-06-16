@@ -34,6 +34,7 @@ public class DatabaseService
             await conn.CreateTableAsync<Defect>();
             await conn.CreateTableAsync<AppSettings>();
             await conn.CreateTableAsync<Profile>();
+            await conn.CreateTableAsync<CloudFileState>();
 
             if (await conn.Table<AppSettings>().CountAsync() == 0)
                 await conn.InsertAsync(new AppSettings());
@@ -64,6 +65,11 @@ public class DatabaseService
     public async Task<int> DeleteCustomerAsync(Customer customer)
     {
         var db = await GetConnectionAsync();
+        // Cascade: müşteriye bağlı projeler (ve onların kanal/kusur satırları + disk dosyaları)
+        // öksüz kalmasın — her proje kendi cascade'iyle silinir.
+        var jobs = await db.Table<Job>().Where(j => j.CustomerId == customer.Id).ToListAsync();
+        foreach (var job in jobs)
+            await DeleteJobAsync(job);
         return await db.DeleteAsync(customer);
     }
 
@@ -86,9 +92,83 @@ public class DatabaseService
     public async Task<int> DeleteJobAsync(Job job)
     {
         var db = await GetConnectionAsync();
-        // Bağlı incelemeler için cascade DB'de yok; manuel temizlik gerek varsa
-        // future bir migration ile foreign key ON DELETE CASCADE eklenir.
+        // Cascade: sqlite-net FK/ON DELETE CASCADE üretmediği için uygulama katmanında —
+        // bağlı kanallar (inspections) kusur satırları ve disk dosyalarıyla birlikte silinir.
+        // Aksi halde öksüz inceleme/kusur satırları DB'de, fotoğraf/video/rapor dosyaları diskte kalıyordu.
+        var inspections = await db.Table<Inspection>().Where(i => i.JobId == job.Id).ToListAsync();
+        foreach (var insp in inspections)
+            await DeleteInspectionCascadeAsync(insp, job);
         return await db.DeleteAsync(job);
+    }
+
+    /// <summary>
+    /// Bir kanalı (inspection) bağlı kusur satırları ve disk dosyalarıyla birlikte siler:
+    /// kusur fotoğrafları (jpg), kanal videosu (mp4) ve üretilmiş rapor PDF'leri.
+    /// Kanal silme akışları doğrudan satır silmek yerine bunu çağırmalı — aksi halde
+    /// defect satırları öksüz kalır ve disk alanı geri kazanılmaz.
+    /// </summary>
+    public async Task<int> DeleteInspectionCascadeAsync(Inspection inspection, Job? job = null)
+    {
+        var db = await GetConnectionAsync();
+        job ??= await db.FindAsync<Job>(inspection.JobId);
+
+        // Kusur satırları + fotoğraf dosyaları
+        var defects = await db.Table<Defect>()
+            .Where(d => d.InspectionId == inspection.Id)
+            .ToListAsync();
+        foreach (var d in defects)
+        {
+            TryDeleteFile(d.PhotoPath);
+            await db.DeleteAsync(d);
+        }
+
+        // Video dosyası
+        TryDeleteFile(inspection.VideoPath);
+
+        // Üretilmiş rapor PDF'leri
+        await TryDeleteChannelReportsAsync(inspection, job);
+
+        return await db.DeleteAsync(inspection);
+    }
+
+    /// <summary>Diskten dosyayı sessizce siler — dosya yoksa/kilitliyse satır silmeyi engellemez.</summary>
+    private static void TryDeleteFile(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return;
+        try { if (File.Exists(path)) File.Delete(path); } catch { /* kilitli olabilir */ }
+    }
+
+    /// <summary>
+    /// Kanala ait üretilmiş rapor PDF'lerini sokağın <c>rapor/</c> klasöründen siler.
+    /// KanalNo varsa <c>_{n}_*rapor*.pdf</c> deseni (ProjectChannelsViewModel ile aynı);
+    /// yoksa yalnızca bu kanalın üreteceği iki dosya adı hedeflenir (komşu kanallara dokunma).
+    /// </summary>
+    private async Task TryDeleteChannelReportsAsync(Inspection insp, Job? job)
+    {
+        try
+        {
+            var settings = await GetSettingsAsync();
+            var root = string.IsNullOrWhiteSpace(settings.StoragePath)
+                ? FileSystem.AppDataDirectory
+                : settings.StoragePath;
+            var dir = StoragePaths.ReportsDir(root, job?.Title, job?.Neighborhood, insp.Street);
+            if (!Directory.Exists(dir)) return;
+
+            if (insp.KanalNo is int n)
+            {
+                foreach (var f in Directory.EnumerateFiles(dir, $"_{n}_*rapor*.pdf").ToList())
+                    TryDeleteFile(f);
+            }
+            else
+            {
+                var fallback = $"kanal_{insp.Id}";
+                TryDeleteFile(Path.Combine(dir, StoragePaths.ReportFileName(
+                    insp.KanalNo, insp.Street, insp.EntryManhole, insp.ExitManhole, fallback)));
+                TryDeleteFile(Path.Combine(dir, StoragePaths.Report13508FileName(
+                    insp.KanalNo, insp.Street, insp.EntryManhole, insp.ExitManhole, fallback)));
+            }
+        }
+        catch { /* rapor klasörüne erişilemezse satır silme akışını durdurma */ }
     }
 
     public async Task<int> GetInspectionCountForJobAsync(int jobId)

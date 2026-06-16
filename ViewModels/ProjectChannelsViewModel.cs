@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -114,17 +115,33 @@ public partial class ProjectChannelsViewModel : BaseViewModel
         _live = live;
         _reports = reports;
         Title = "Kanallar";
+        // DİKKAT: Singleton LiveViewModel aboneliği constructor'da KURULMAZ (transient VM sızıntı yapar).
+        // Sayfa yaşam döngüsü Activate()/Deactivate() ile abone olur/çıkar.
+    }
 
-        // Kayıt durumu değişince buton metnini güncelle
-        _live.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(LiveViewModel.IsRecording))
-            {
-                OnPropertyChanged(nameof(RecordButtonText));
-                OnPropertyChanged(nameof(RecordButtonColor));
-                OnPropertyChanged(nameof(CanStartRecording));
-            }
-        };
+    /// <summary>Sayfa görünür olunca çağrılır: Live aboneliğini kurar, buton durumunu tazeler.</summary>
+    public void Activate()
+    {
+        _live.PropertyChanged -= OnLiveChanged; // çift aboneliği önle
+        _live.PropertyChanged += OnLiveChanged;
+        RefreshRecordingState(); // sayfa görünmezken değişen kayıt durumunu yakala
+    }
+
+    /// <summary>Sayfa görünmez olunca çağrılır: singleton Live aboneliğini söker (bellek sızıntısı önlenir).</summary>
+    public void Deactivate() => _live.PropertyChanged -= OnLiveChanged;
+
+    // Kayıt durumu değişince buton metnini güncelle
+    private void OnLiveChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(LiveViewModel.IsRecording))
+            RefreshRecordingState();
+    }
+
+    private void RefreshRecordingState()
+    {
+        OnPropertyChanged(nameof(RecordButtonText));
+        OnPropertyChanged(nameof(RecordButtonColor));
+        OnPropertyChanged(nameof(CanStartRecording));
     }
 
     partial void OnProjectIdChanged(int value)
@@ -142,14 +159,29 @@ public partial class ProjectChannelsViewModel : BaseViewModel
         _ = LoadChannelPhotosAsync();
     }
 
+    /// <summary>Bayat (geciken) fotoğraf yüklemelerini ayırt etmek için sıra sayacı (yalnız UI thread'inde değişir).</summary>
+    private int _photoLoadSeq;
+
     /// <summary>Seçili kanalın kayıtlı fotoğraflarını (yorumlu) DB'den yükle.</summary>
     private async Task LoadChannelPhotosAsync()
     {
+        var seq = ++_photoLoadSeq;
         ChannelPhotos.Clear();
-        if (SelectedChannel is null) return;
-        var photos = await _db.GetDefectsAsync(SelectedChannel.Inspection.Id);
-        foreach (var p in photos.OrderByDescending(p => p.CreatedAt))
-            ChannelPhotos.Add(p);
+        var target = SelectedChannel;
+        if (target is null) return;
+        try
+        {
+            var photos = await _db.GetDefectsAsync(target.Inspection.Id);
+            // Bayat yükleme: sorgu sürerken seçim değişti (veya daha yeni bir yükleme başladı) — listeyi kirletme
+            if (seq != _photoLoadSeq || !ReferenceEquals(target, SelectedChannel)) return;
+            ChannelPhotos.Clear();
+            foreach (var p in photos.OrderByDescending(p => p.CreatedAt))
+                ChannelPhotos.Add(p);
+        }
+        catch (Exception ex)
+        {
+            Live.StatusMessage = $"Fotoğraflar yüklenemedi: {ex.Message}";
+        }
     }
 
     public async Task LoadAsync()
@@ -271,10 +303,16 @@ public partial class ProjectChannelsViewModel : BaseViewModel
             // {Proje}/{Mahalle}/{Sokak}/resim/{Kanal}_{Sokak}_{GB}_{ÇB}_{dk}_{sn}_{ms}.jpg
             var dir = StoragePaths.PhotosDir(root, Project?.Title, Project?.Neighborhood, insp.Street);
             Directory.CreateDirectory(dir);
-            var path = Path.Combine(dir,
-                StoragePaths.PhotoFileName(insp.KanalNo, insp.Street,
-                                           insp.EntryManhole, insp.ExitManhole,
-                                           $"kanal_{insp.KanalNo ?? insp.Id}", videoTime));
+            var fileName = StoragePaths.PhotoFileName(insp.KanalNo, insp.Street,
+                                                      insp.EntryManhole, insp.ExitManhole,
+                                                      $"kanal_{insp.KanalNo ?? insp.Id}", videoTime);
+            var path = Path.Combine(dir, fileName);
+            // Aynı ada sahip dosya varsa üzerine YAZMA — artan sonekle benzersizleştir.
+            // (Özellikle kayıt yokken videoTime=00:00 olur; aksi hâlde her fotoğraf öncekini ezerdi
+            //  ve iki Defect kaydı aynı dosyayı paylaşırdı.)
+            var stem = Path.GetFileNameWithoutExtension(fileName);
+            for (int i = 2; File.Exists(path); i++)
+                path = Path.Combine(dir, $"{stem}_{i}.jpg");
             await File.WriteAllBytesAsync(path, frame);
 
             var photo = new Defect
@@ -337,13 +375,29 @@ public partial class ProjectChannelsViewModel : BaseViewModel
         if (!confirmed) return;
 
         await _db.DeleteDefectAsync(photo);
-        if (!string.IsNullOrEmpty(photo.PhotoPath) && File.Exists(photo.PhotoPath))
-        {
-            try { File.Delete(photo.PhotoPath); } catch { }
-        }
+        await DeletePhotoFileIfUnusedAsync(photo.PhotoPath);
         ChannelPhotos.Remove(photo);
         if (SelectedChannel is not null) SelectedChannel.DefectCount = ChannelPhotos.Count;
         Live.StatusMessage = "Fotoğraf silindi";
+    }
+
+    /// <summary>
+    /// Fotoğraf dosyasını yalnızca başka HİÇBİR Defect kaydı aynı yolu kullanmıyorsa siler.
+    /// (Eski sürümlerde çakışan dosya adları iki kaydı aynı dosyaya bağlamış olabilir —
+    /// ortak dosya silinirse diğer kaydın görseli kalıcı kaybolurdu.)
+    /// </summary>
+    private async Task DeletePhotoFileIfUnusedAsync(string? photoPath)
+    {
+        if (string.IsNullOrEmpty(photoPath) || !File.Exists(photoPath)) return;
+        try
+        {
+            var conn = await _db.GetConnectionAsync();
+            var shared = await conn.Table<Defect>()
+                .Where(d => d.PhotoPath == photoPath)
+                .CountAsync();
+            if (shared == 0) File.Delete(photoPath);
+        }
+        catch { }
     }
 
     /// <summary>Bir kanala ait tüm fotoğrafları (DB kayıtları + disk dosyaları) siler. Üzerine yeni kayıt yapılırken çağrılır.</summary>
@@ -355,10 +409,7 @@ public partial class ProjectChannelsViewModel : BaseViewModel
             foreach (var p in photos)
             {
                 await _db.DeleteDefectAsync(p);
-                if (!string.IsNullOrEmpty(p.PhotoPath) && File.Exists(p.PhotoPath))
-                {
-                    try { File.Delete(p.PhotoPath); } catch { }
-                }
+                await DeletePhotoFileIfUnusedAsync(p.PhotoPath);
             }
             ChannelPhotos.Clear();
             if (SelectedChannel is not null) SelectedChannel.DefectCount = 0;
@@ -481,22 +532,47 @@ public partial class ProjectChannelsViewModel : BaseViewModel
     {
         // Rapor için kanal kimliğini seçim temizlenmeden önce sakla
         var finishedId = SelectedChannel?.Inspection.Id ?? 0;
+        // Adımlardan biri başarısız olsa da kalan temizlik adımları ÇALIŞMALI —
+        // ilk hata saklanır, sonda kullanıcıya gösterilir.
+        string? stepError = null;
 
         // 0. Kanal sonu otomatik fotoğrafı — kayıt DURDURULMADAN ÖNCE çek
-        if (Live.IsRecording)
-            await CaptureAutoPhotoAsync("Kanal Sonu");
+        try
+        {
+            if (Live.IsRecording)
+                await CaptureAutoPhotoAsync("Kanal Sonu");
+        }
+        catch (Exception ex)
+        {
+            stepError ??= $"Kanal sonu fotoğrafı alınamadı: {ex.Message}";
+        }
         // 1. Kaydı durdur
-        if (Live.IsRecording)
-            await Live.StopChannelRecordingAsync();
+        try
+        {
+            if (Live.IsRecording)
+                await Live.StopChannelRecordingAsync();
+        }
+        catch (Exception ex)
+        {
+            stepError ??= $"Kayıt durdurulamadı: {ex.Message}";
+        }
         // 2. İncelemeyi kapat (mesafe, bitiş zamanı DB'ye yazılır)
-        if (Live.IsInspecting)
-            await Live.FinishInspectionCommand.ExecuteAsync(null);
-        // 3. Seçimi temizle
+        try
+        {
+            if (Live.IsInspecting)
+                await Live.FinishInspectionCommand.ExecuteAsync(null);
+        }
+        catch (Exception ex)
+        {
+            stepError ??= $"İnceleme kapatılamadı: {ex.Message}";
+        }
+        // 3. Seçimi temizle (önceki adımlar başarısız olsa bile)
         foreach (var ch in Channels) ch.IsSelected = false;
         SelectedChannel = null;
         // 4. Kanal listesini yenile (kusur sayısı, metre güncellensin)
-        await LoadAsync();
-        StatusMessage = "Kanal tamamlandı";
+        try { await LoadAsync(); }
+        catch (Exception ex) { stepError ??= $"Kanal listesi yenilenemedi: {ex.Message}"; }
+        StatusMessage = stepError is null ? "Kanal tamamlandı" : $"Kanal kapatma hatası — {stepError}";
 
         // 5. Otomatik rapor (2 PDF) üret — rapor/ klasörüne
         if (finishedId > 0)
@@ -504,11 +580,14 @@ public partial class ProjectChannelsViewModel : BaseViewModel
             try
             {
                 await _reports.GenerateChannelReportsAsync(finishedId);
-                StatusMessage = "Kanal tamamlandı ✓  —  2 rapor oluşturuldu (rapor/)";
+                if (stepError is null)
+                    StatusMessage = "Kanal tamamlandı ✓  —  2 rapor oluşturuldu (rapor/)";
             }
             catch (Exception ex)
             {
-                StatusMessage = $"Kanal tamamlandı, rapor hatası: {ex.Message}";
+                StatusMessage = stepError is null
+                    ? $"Kanal tamamlandı, rapor hatası: {ex.Message}"
+                    : $"{stepError} · rapor hatası: {ex.Message}";
             }
         }
     }
@@ -591,8 +670,8 @@ public partial class ProjectChannelsViewModel : BaseViewModel
             "Sil", "Vazgeç");
         if (!confirmed) return;
 
-        var conn = await _db.GetConnectionAsync();
-        await conn.DeleteAsync(item.Inspection);
+        // Cascade: bağlı kusur satırları + foto/video/rapor dosyaları da temizlenir.
+        await _db.DeleteInspectionCascadeAsync(item.Inspection, Project);
         if (SelectedChannel == item) SelectedChannel = null;
         Channels.Remove(item);
         TotalChannels = Channels.Count;

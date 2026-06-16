@@ -37,6 +37,7 @@ public sealed class SyncedVideoPipeline : IAsyncDisposable
 
     private int _w, _h;
     private volatile bool _recording;
+    private double? _smoothMeters;   // metre ramp yumuşatma (kare hızında üstel)
 
     // Kayıt: okuyucu thread'inden AYRI sabit-hızlı örnekleyici. _current'i fps hızında örnekler;
     // okuyucu/canlı görüntü encoder'a hiç dokunmaz → donma yok, süre = gerçek süre.
@@ -97,6 +98,8 @@ public sealed class SyncedVideoPipeline : IAsyncDisposable
         Stop();
         _cts = new CancellationTokenSource();
         lock (_ptsLock) { _ptsQueue.Clear(); _pts0 = double.NaN; }
+        _w = 0; _h = 0;        // farklı çözünürlüklü akışa geçişte bayat boyut kalmasın (aspect-fit bozulur)
+        _smoothMeters = null;  // metre yumuşatma önceki oturumun değerinden ramp yapmasın
 
         // ÖNİZLEME yolu — düşük gecikme. Kullanıcı bunu SUB akış /102 (≈640x360) ile besler,
         // o yüzden downscale GEREKMEZ. Kayıt AYRI bir process (FfmpegOverlayRecorder, /101 4K
@@ -105,7 +108,10 @@ public sealed class SyncedVideoPipeline : IAsyncDisposable
             $"-rtsp_transport tcp -fflags nobuffer -flags low_delay " +
             $"-probesize 200000 -analyzeduration 500000 " +
             $"-i \"{rtspUrl}\" -an " +
-            $"-vf showinfo,fps={fps} " +
+            // DİKKAT: showinfo fps'ten SONRA olmalı — yalnız stdout'a gerçekten yazılan
+            // kareler loglanır (PTS↔JPEG 1:1). Tersi sırada kuyruk sürekli büyür ve
+            // overlay'e saniyelerce eski karelerin metresi yazılır.
+            $"-vf fps={fps},showinfo " +
             $"-f mjpeg -q:v 3 pipe:1";
 
         var psi = new ProcessStartInfo(ffmpegPath, args)
@@ -137,7 +143,13 @@ public sealed class SyncedVideoPipeline : IAsyncDisposable
     {
         StopRecording();
         _cts?.Cancel();
+        // Ölmekte olan sürecin tamponda kalan stderr satırları (bayat PTS) yeni
+        // oturumun kuyruğunu kirletmesin: handler'ı öldürmeden ÖNCE ayır.
+        if (_decode is not null) _decode.ErrorDataReceived -= OnDecodeStderr;
         KillProc(ref _decode);
+        // Eski okuyucu task'ı yeni oturumla eşzamanlı ComposeFrame çalıştırmasın.
+        try { _reader?.Wait(500); } catch { }
+        _reader = null;
         lock (_frameLock) { _current?.Dispose(); _current = null; }
     }
 
@@ -335,6 +347,13 @@ public sealed class SyncedVideoPipeline : IAsyncDisposable
     {
         lock (_ptsLock)
         {
+            // Sağlamlık: üretici/tüketici dengesizliği birikirse (PTS↔kare eşleşmesi
+            // bozulup kuyruk derinleşirse) en yeni PTS'e atla — kayma saniyelere büyüyemez.
+            if (_ptsQueue.Count > 10)
+            {
+                Debug.WriteLine($"[pts] kuyruk derinliği {_ptsQueue.Count} — en yeni PTS'e atlanıyor");
+                while (_ptsQueue.Count > 1) _ptsQueue.Dequeue();
+            }
             if (_ptsQueue.Count > 0) return _ptsQueue.Dequeue();
         }
         return double.NaN;
@@ -417,8 +436,16 @@ public sealed class SyncedVideoPipeline : IAsyncDisposable
 
         if (_w == 0) { _w = bmp.Width; _h = bmp.Height; }
 
-        // Overlay: senkron metre + statik alanlar + video zaman sayacı (duvar saati DEĞİL)
-        Overlay.Meters = _sync.MetersAt(captureAppTime);
+        // Overlay: senkron metre (RAMP yumuşatma — zıplama yok) + statik alanlar + video zaman sayacı
+        double? targetM = _sync.MetersAt(captureAppTime);
+        if (targetM is double tg)
+        {
+            // Kare hızında üstel yumuşatma: bir önceki gösterilen değerden hedefe ramp.
+            _smoothMeters = _smoothMeters is double cur ? cur + (tg - cur) * 0.18 : tg;
+            if (Math.Abs(tg - _smoothMeters.Value) < 0.005) _smoothMeters = tg;
+            Overlay.Meters = _smoothMeters;
+        }
+        else Overlay.Meters = null;
         Overlay.NowText = FormatVideoClock(RecordingElapsed);
         Overlay.IsRecording = ShowRecBadge;
 

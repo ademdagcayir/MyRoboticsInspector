@@ -121,12 +121,49 @@
         <ShellContent ContentTemplate="{DataTemplate pages:SettingsPage}" Route="settings" />
     </FlyoutItem>
 
-    <!-- ════════ FOOTER ════════ -->
+    <!-- ════════ FOOTER — operatör + bulut durumu + oturum ════════ -->
     <Shell.FlyoutFooter>
         <VerticalStackLayout Spacing="0" Padding="0,0,0,4">
             <BoxView HeightRequest="1" Color="{StaticResource ColorBorder}" />
-            <Grid Padding="16,12,16,14" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+
+            <!-- Aktif operatör kartı -->
+            <Grid x:Name="OperatorRow" Padding="16,12,16,4" ColumnDefinitions="Auto,*" ColumnSpacing="10"
+                  IsVisible="False">
+                <Border Grid.Column="0" StrokeThickness="1.2" Stroke="{StaticResource ColorGold}"
+                        StrokeShape="RoundRectangle 18" HeightRequest="36" WidthRequest="36"
+                        Background="{StaticResource ColorGoldMuted}">
+                    <Label x:Name="OperatorAvatar" Text="?" FontSize="13" FontAttributes="Bold"
+                           TextColor="{StaticResource ColorGold}"
+                           HorizontalOptions="Center" VerticalOptions="Center" />
+                </Border>
+                <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                    <Label x:Name="OperatorNameLabel" Text="" FontSize="13" FontAttributes="Bold"
+                           TextColor="{StaticResource ColorTextPrimary}" LineBreakMode="TailTruncation" />
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                        <Ellipse x:Name="CloudDot" Grid.Column="0" WidthRequest="8" HeightRequest="8"
+                                 Fill="#7E828F" VerticalOptions="Center" />
+                        <Label x:Name="CloudStatusLabel" Grid.Column="1" Text="Bulut yedek kapalı"
+                               FontSize="10.5" TextColor="{StaticResource ColorTextTertiary}"
+                               VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Grid>
+
+            <Grid Padding="16,8,16,14" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
                 <Button Grid.Column="0"
+                        x:Name="SwitchProfileButton"
+                        Text="⇄ Profil"
+                        Clicked="OnSwitchProfileClicked"
+                        BackgroundColor="Transparent"
+                        TextColor="{StaticResource ColorTextSecondary}"
+                        BorderColor="{StaticResource ColorBorder}"
+                        BorderWidth="1"
+                        CornerRadius="9"
+                        FontSize="12.5"
+                        HeightRequest="36"
+                        Padding="12,0"
+                        IsVisible="False" />
+                <Button Grid.Column="1"
                         Text="Çıkış"
                         Clicked="OnExitClicked"
                         BackgroundColor="Transparent"
@@ -134,12 +171,13 @@
                         BorderColor="{StaticResource ColorBorder}"
                         BorderWidth="1"
                         CornerRadius="9"
-                        FontSize="13"
-                        HeightRequest="38"
+                        FontSize="12.5"
+                        HeightRequest="36"
                         HorizontalOptions="Start"
-                        Padding="16,0" />
-                <Label Grid.Column="1"
-                       Text="v1.0.0"
+                        Padding="12,0" />
+                <Label Grid.Column="2"
+                       x:Name="VersionLabel"
+                       Text=""
                        FontSize="10.5"
                        TextColor="{StaticResource ColorTextTertiary}"
                        VerticalOptions="Center" />

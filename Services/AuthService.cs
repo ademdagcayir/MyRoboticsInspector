@@ -19,7 +19,10 @@ public class AuthService
     public async Task<List<Profile>> GetProfilesAsync()
     {
         var conn = await _db.GetConnectionAsync();
-        return await conn.Table<Profile>().OrderByDescending(p => p.LastLoginAt ?? p.CreatedAt).ToListAsync();
+        // DİKKAT: sqlite-net OrderBy ifadesinde '??' desteklemez (NotSupportedException)
+        // — sıralama bellekte yapılır. Profil sayısı küçük, maliyeti yok.
+        var list = await conn.Table<Profile>().ToListAsync();
+        return list.OrderByDescending(p => p.LastLoginAt ?? p.CreatedAt).ToList();
     }
 
     public async Task<Profile> CreateAsync(string name, string? pin, string? email)
@@ -38,6 +41,10 @@ public class AuthService
         var conn = await _db.GetConnectionAsync();
         await conn.UpdateAsync(profile);
 
+        // Sonraki açılışta sessiz giriş: yalnız PIN'siz profiller otomatik girer.
+        Preferences.Set("last_profile_id", profile.Id);
+        Preferences.Set("last_profile_autologin", string.IsNullOrEmpty(profile.Pin));
+
         CurrentProfile = profile;
         CurrentProfileChanged?.Invoke(this, EventArgs.Empty);
         return true;
@@ -45,6 +52,7 @@ public class AuthService
 
     public void Logout()
     {
+        Preferences.Set("last_profile_autologin", false);
         CurrentProfile = null;
         CurrentProfileChanged?.Invoke(this, EventArgs.Empty);
     }

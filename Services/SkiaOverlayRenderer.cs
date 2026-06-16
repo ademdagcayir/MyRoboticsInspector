@@ -17,6 +17,7 @@ public sealed class VideoOverlayModel
 
     // Dinamik
     public double? Meters { get; set; }
+    public double? TiltDegrees { get; set; }   // kalibre eğim (±°), null=gösterme
     public string? NowText { get; set; }
     public bool IsRecording { get; set; }
 
@@ -104,6 +105,20 @@ public sealed class SkiaOverlayRenderer
             float lblTop = valTop - lblH;
             DrawLeft(canvas, lbl, pad, lblTop, smallSize, Sub, _regular);
             DrawLeft(canvas, val, pad, valTop, meterSize, Highlight, _bold);
+        }
+
+        // ── ALT SAĞ: eğim (kalibre °, alttan-sağa hizalı) ──
+        if (m.TiltDegrees is double tilt)
+        {
+            string tval = $"{tilt:+0.0;-0.0;0.0}°";
+            string tlbl = "Eğim";
+            float tvalSize = MathF.Max(20f, h * 0.055f) * fs;
+            float tvalH = BoxHeight(tvalSize);
+            float tlblH = BoxHeight(smallSize);
+            float tvalTop = h - pad - tvalH;
+            float tlblTop = tvalTop - tlblH;
+            DrawRight(canvas, tlbl, w - pad, tlblTop, smallSize, Sub, _regular);
+            DrawRight(canvas, tval, w - pad, tvalTop, tvalSize, White, _bold);
         }
     }
 

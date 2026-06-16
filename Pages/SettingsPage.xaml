@@ -63,10 +63,18 @@
                                 <Entry Text="{Binding Settings.Street}" Placeholder="örn. 234. Sokak" />
                             </VerticalStackLayout>
                         </Grid>
-                        <VerticalStackLayout>
-                            <Label Text="Operatör Adı" Style="{StaticResource Caption}" />
-                            <Entry Text="{Binding Settings.OperatorName}" Placeholder="örn. Adem Dağcayır" />
-                        </VerticalStackLayout>
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                            <VerticalStackLayout Grid.Column="0">
+                                <Label Text="Operatör Adı" Style="{StaticResource Caption}" />
+                                <Entry Text="{Binding Settings.OperatorName}" Placeholder="örn. Adem Dağcayır" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Column="1">
+                                <Label Text="Cihaz Adı (bulut)" Style="{StaticResource Caption}" />
+                                <Entry Text="{Binding Settings.DeviceLabel}" Placeholder="örn. Saha Tableti 1" />
+                            </VerticalStackLayout>
+                        </Grid>
+                        <Label Text="Operatör + cihaz + robot bilgisi her kanal kaydına işlenir; bulutta firma hesabı içinde bunlara göre ayrışır."
+                               FontSize="10" TextColor="{StaticResource ColorTextTertiary}" />
                     </VerticalStackLayout>
                 </Border>
 
@@ -222,6 +230,120 @@
                     </VerticalStackLayout>
                 </Border>
 
+                <!-- ============== BULUT YEDEK (Supabase) ============== -->
+                <Border Style="{StaticResource CardBorder}" Stroke="#59C6A15B" StrokeThickness="1.4">
+                    <VerticalStackLayout Spacing="12">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Grid.Column="0" Text="☁️ BULUT YEDEK" Style="{StaticResource SectionTitle}"
+                                   TextColor="#C6A15B" />
+                            <Label Grid.Column="1" Text="{Binding CloudStatusText}"
+                                   TextColor="{Binding CloudStatusColor}" FontSize="12"
+                                   FontAttributes="Bold" VerticalOptions="Center" />
+                        </Grid>
+
+                        <!-- Hesap yokken: giriş / kayıt -->
+                        <VerticalStackLayout Spacing="8"
+                                             IsVisible="{Binding IsCloudSignedIn, Converter={StaticResource InvertedBool}}">
+                            <Label Text="Videolar, resimler, raporlar ve tüm veriler hesabınıza şifreli olarak yedeklenir. Her operatör/firma kendi hesabıyla çalışır — veriler birbirinden tamamen izoledir."
+                                   FontSize="11" TextColor="{StaticResource ColorTextTertiary}" />
+                            <Entry Text="{Binding CloudEmailInput}" Placeholder="E-posta" Keyboard="Email" />
+                            <Entry Text="{Binding CloudPasswordInput}" Placeholder="Parola" IsPassword="True" />
+                            <Grid ColumnDefinitions="*,*,Auto" ColumnSpacing="10">
+                                <Button Grid.Column="0" Text="🔑 Giriş Yap"
+                                        Style="{StaticResource PrimaryButton}"
+                                        Command="{Binding CloudSignInCommand}"
+                                        IsEnabled="{Binding IsCloudBusy, Converter={StaticResource InvertedBool}}" />
+                                <Button Grid.Column="1" Text="✨ Hesap Oluştur"
+                                        Style="{StaticResource SecondaryButton}"
+                                        Command="{Binding CloudSignUpCommand}"
+                                        IsEnabled="{Binding IsCloudBusy, Converter={StaticResource InvertedBool}}" />
+                                <ActivityIndicator Grid.Column="2" IsRunning="{Binding IsCloudBusy}"
+                                                   IsVisible="{Binding IsCloudBusy}"
+                                                   Color="#C6A15B" VerticalOptions="Center" />
+                            </Grid>
+                        </VerticalStackLayout>
+
+                        <!-- Hesap varken: durum + kuyruk + dosyalar + korumalı silme -->
+                        <VerticalStackLayout Spacing="10" IsVisible="{Binding IsCloudSignedIn}">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                <Label Grid.Column="0" Text="{Binding CloudSignedInEmail, StringFormat='👤 {0}'}"
+                                       Style="{StaticResource BodyText}" VerticalOptions="Center" />
+                                <Button Grid.Column="1" Text="Çıkış" Style="{StaticResource SecondaryButton}"
+                                        Command="{Binding CloudSignOutCommand}" />
+                            </Grid>
+
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                                <Switch Grid.Column="0" IsToggled="{Binding Settings.CloudBackupEnabled}" />
+                                <Label Grid.Column="1" Text="Otomatik bulut yedekleme"
+                                       Style="{StaticResource BodyText}" VerticalOptions="Center" />
+                            </Grid>
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                                <Switch Grid.Column="0" IsToggled="{Binding Settings.CloudIncludeVideos}" />
+                                <Label Grid.Column="1" Text="Videolar da yedeklensin (büyük dosyalar)"
+                                       Style="{StaticResource BodyText}" VerticalOptions="Center" />
+                            </Grid>
+
+                            <Label Text="{Binding CloudCurrentItem}" FontSize="11"
+                                   TextColor="{StaticResource ColorTextTertiary}"
+                                   IsVisible="{Binding CloudCurrentItem, Converter={StaticResource StringNotEmpty}}" />
+                            <Label Text="{Binding CloudQueueText}" FontSize="12"
+                                   TextColor="{StaticResource ColorTextSecondary}"
+                                   IsVisible="{Binding CloudQueueText, Converter={StaticResource StringNotEmpty}}" />
+
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                                <Button Grid.Column="0" Text="⬆ Şimdi Yedekle"
+                                        Style="{StaticResource PrimaryButton}"
+                                        Command="{Binding CloudSyncNowCommand}" />
+                                <Button Grid.Column="1" Text="🔄 Bulut Listesini Yenile"
+                                        Style="{StaticResource SecondaryButton}"
+                                        Command="{Binding LoadCloudFilesCommand}"
+                                        IsEnabled="{Binding IsCloudFilesLoading, Converter={StaticResource InvertedBool}}" />
+                            </Grid>
+
+                            <Label Text="{Binding CloudTotalsText}" FontSize="12" FontAttributes="Bold"
+                                   TextColor="#C6A15B"
+                                   IsVisible="{Binding CloudTotalsText, Converter={StaticResource StringNotEmpty}}" />
+
+                            <!-- Son yüklenen dosyalar + PIN korumalı silme -->
+                            <VerticalStackLayout Spacing="4"
+                                                 BindableLayout.ItemsSource="{Binding CloudFiles}">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:CloudFileDisplay">
+                                        <Border Background="{StaticResource ColorSurfaceHigh}"
+                                                StrokeShape="RoundRectangle 6" StrokeThickness="0" Padding="8,6">
+                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                <VerticalStackLayout Grid.Column="0" Spacing="1">
+                                                    <Label Text="{Binding FileName}" FontSize="12"
+                                                           LineBreakMode="MiddleTruncation" />
+                                                    <Label Text="{Binding Detail}" FontSize="10"
+                                                           TextColor="{StaticResource ColorTextTertiary}" />
+                                                </VerticalStackLayout>
+                                                <Button Grid.Column="1" Text="🔒🗑" FontSize="12"
+                                                        Padding="8,4" BackgroundColor="Transparent"
+                                                        TextColor="#e66"
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SettingsViewModel}}, Path=DeleteCloudFileCommand}"
+                                                        CommandParameter="{Binding .}" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                <Button Grid.Column="0" Text="🔐 Silme PIN'i Belirle / Değiştir"
+                                        Style="{StaticResource SecondaryButton}"
+                                        Command="{Binding SetCloudDeletePinCommand}" />
+                                <Button Grid.Column="1" Text="Kilidi Kapat"
+                                        Style="{StaticResource SecondaryButton}"
+                                        Command="{Binding LockCloudDeleteCommand}"
+                                        IsVisible="{Binding IsCloudDeleteUnlocked}" />
+                            </Grid>
+                            <Label Text="Buluta her şey otomatik EKLENİR; buluttan silme yalnız sunucu doğrulamalı PIN ile açılan 5 dakikalık pencerede mümkündür. PIN sunucuda bcrypt ile saklanır — uygulamada veya cihazda tutulmaz."
+                                   FontSize="10" TextColor="{StaticResource ColorTextTertiary}" />
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+
                 <!-- ============== DEPOLAMA ============== -->
                 <Border Style="{StaticResource CardBorder}">
                     <VerticalStackLayout Spacing="10">
@@ -293,6 +415,53 @@
                             <Label Text="Görüntüye gömülen proje/baca/metre yazılarının fontu ve boyutu. Kaydet'e basınca canlı görüntü ve kayda anında uygulanır."
                                    FontSize="10" TextColor="{StaticResource ColorTextTertiary}" Margin="0,2,0,0" />
                         </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- ============== KALİBRASYON (Eğim + Basınç) ============== -->
+                <Border Style="{StaticResource CardBorder}">
+                    <VerticalStackLayout Spacing="12">
+                        <Label Text="SENSÖR KALİBRASYONU" Style="{StaticResource SectionTitle}" />
+
+                        <!-- Anlık ham okumalar (yakalama referansı) -->
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                            <Label Grid.Column="0" FontSize="11" TextColor="{StaticResource ColorTextSecondary}"
+                                   Text="{Binding Telemetry.TiltRaw, StringFormat='Anlık eğim ham: {0}', TargetNullValue='Anlık eğim ham: —'}" />
+                            <Label Grid.Column="1" FontSize="11" TextColor="{StaticResource ColorTextSecondary}"
+                                   Text="{Binding Telemetry.PressureRaw, StringFormat='Anlık basınç ham: {0}', TargetNullValue='Anlık basınç ham: —'}" />
+                        </Grid>
+
+                        <!-- EĞİM 3-nokta -->
+                        <Label Text="Eğim (°) — 3 referans" FontAttributes="Bold" FontSize="12" />
+                        <Grid ColumnDefinitions="80,*,Auto" ColumnSpacing="8" RowDefinitions="Auto,Auto,Auto" RowSpacing="6">
+                            <Label Grid.Row="0" Grid.Column="0" Text="0° (yatay)" FontSize="11" VerticalOptions="Center" />
+                            <Entry Grid.Row="0" Grid.Column="1" Text="{Binding Settings.TiltRaw0Deg}" Keyboard="Numeric" Placeholder="ham ADC" />
+                            <Button Grid.Row="0" Grid.Column="2" Text="📍 Yakala" Style="{StaticResource SecondaryButton}" FontSize="11" Padding="10,4" Command="{Binding CaptureTilt0Command}" />
+
+                            <Label Grid.Row="1" Grid.Column="0" Text="-45°" FontSize="11" VerticalOptions="Center" />
+                            <Entry Grid.Row="1" Grid.Column="1" Text="{Binding Settings.TiltRawMinus45}" Keyboard="Numeric" Placeholder="ham ADC" />
+                            <Button Grid.Row="1" Grid.Column="2" Text="📍 Yakala" Style="{StaticResource SecondaryButton}" FontSize="11" Padding="10,4" Command="{Binding CaptureTiltMinus45Command}" />
+
+                            <Label Grid.Row="2" Grid.Column="0" Text="+45°" FontSize="11" VerticalOptions="Center" />
+                            <Entry Grid.Row="2" Grid.Column="1" Text="{Binding Settings.TiltRawPlus45}" Keyboard="Numeric" Placeholder="ham ADC" />
+                            <Button Grid.Row="2" Grid.Column="2" Text="📍 Yakala" Style="{StaticResource SecondaryButton}" FontSize="11" Padding="10,4" Command="{Binding CaptureTiltPlus45Command}" />
+                        </Grid>
+                        <Label Text="Robotu ilgili açıya getirip 'Yakala'ya basın (ya da değeri elle girin). Gelen ham ADC bu referanslara göre ±dereceye çevrilir."
+                               FontSize="10" TextColor="{StaticResource ColorTextTertiary}" />
+
+                        <!-- BASINÇ min/max -->
+                        <Label Text="Basınç (%) — min/max aralık" FontAttributes="Bold" FontSize="12" Margin="0,6,0,0" />
+                        <Grid ColumnDefinitions="80,*,Auto" ColumnSpacing="8" RowDefinitions="Auto,Auto" RowSpacing="6">
+                            <Label Grid.Row="0" Grid.Column="0" Text="Min (%0)" FontSize="11" VerticalOptions="Center" />
+                            <Entry Grid.Row="0" Grid.Column="1" Text="{Binding Settings.PressureRawMin}" Keyboard="Numeric" Placeholder="alt sınır ham ADC" />
+                            <Button Grid.Row="0" Grid.Column="2" Text="📍 Yakala" Style="{StaticResource SecondaryButton}" FontSize="11" Padding="10,4" Command="{Binding CapturePressureMinCommand}" />
+
+                            <Label Grid.Row="1" Grid.Column="0" Text="Max (%100)" FontSize="11" VerticalOptions="Center" />
+                            <Entry Grid.Row="1" Grid.Column="1" Text="{Binding Settings.PressureRawMax}" Keyboard="Numeric" Placeholder="üst sınır ham ADC" />
+                            <Button Grid.Row="1" Grid.Column="2" Text="📍 Yakala" Style="{StaticResource SecondaryButton}" FontSize="11" Padding="10,4" Command="{Binding CapturePressureMaxCommand}" />
+                        </Grid>
+                        <Label Text="Basınç bu aralıkta %0–100'e ölçeklenir; stream altında pil-tarzı barda gösterilir (≥%60 yeşil, %40–60 turuncu, &lt;%40 kırmızı)."
+                               FontSize="10" TextColor="{StaticResource ColorTextTertiary}" />
                     </VerticalStackLayout>
                 </Border>
 

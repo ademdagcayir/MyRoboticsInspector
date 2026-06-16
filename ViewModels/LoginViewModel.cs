@@ -41,13 +41,22 @@ public partial class LoginViewModel : BaseViewModel
     [RelayCommand]
     public async Task LoadAsync()
     {
-        var list = await _auth.GetProfilesAsync();
-        Profiles.Clear();
-        foreach (var p in list) Profiles.Add(p);
-        OnPropertyChanged(nameof(HasProfiles));
+        try
+        {
+            var list = await _auth.GetProfilesAsync();
+            Profiles.Clear();
+            foreach (var p in list) Profiles.Add(p);
+            OnPropertyChanged(nameof(HasProfiles));
 
-        // First-run: no profiles → jump straight to "create" form.
-        if (!HasProfiles) IsCreating = true;
+            // First-run: no profiles → jump straight to "create" form.
+            if (!HasProfiles) IsCreating = true;
+        }
+        catch (Exception ex)
+        {
+            // async void OnAppearing'den çağrılır — fırlatırsa WinUI dispatcher'ı
+            // tüm uygulamayı düşürür (stowed exception). Burada yut ve göster.
+            ErrorMessage = "Profiller yüklenemedi: " + ex.Message;
+        }
     }
 
     [RelayCommand]

@@ -6,123 +6,202 @@
              x:Class="MyRoboticsInspector.Pages.LoginPage"
              x:DataType="vm:LoginViewModel"
              Title="MyRoboticsInspector"
-             BackgroundColor="{StaticResource ColorPageBg}">
+             Shell.NavBarIsVisible="False">
 
-    <Grid Padding="40">
+    <!-- ════ Sinematik zemin: derin uzay gradyanı + altın/mavi ışıma ════ -->
+    <Grid>
+        <Grid.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="#0B0C12" Offset="0" />
+                <GradientStop Color="#0E1018" Offset="0.5" />
+                <GradientStop Color="#070808" Offset="1" />
+            </LinearGradientBrush>
+        </Grid.Background>
+
+        <!-- Dekoratif ışıma küreleri (yumuşak, düşük opaklık) -->
+        <Ellipse WidthRequest="520" HeightRequest="520" Opacity="0.16"
+                 HorizontalOptions="Start" VerticalOptions="Start"
+                 Margin="-180,-200,0,0" InputTransparent="True">
+            <Ellipse.Fill>
+                <RadialGradientBrush Center="0.5,0.5" Radius="0.5">
+                    <GradientStop Color="#C6A15B" Offset="0" />
+                    <GradientStop Color="#00C6A15B" Offset="1" />
+                </RadialGradientBrush>
+            </Ellipse.Fill>
+        </Ellipse>
+        <Ellipse WidthRequest="640" HeightRequest="640" Opacity="0.12"
+                 HorizontalOptions="End" VerticalOptions="End"
+                 Margin="0,0,-240,-260" InputTransparent="True">
+            <Ellipse.Fill>
+                <RadialGradientBrush Center="0.5,0.5" Radius="0.5">
+                    <GradientStop Color="#0A84FF" Offset="0" />
+                    <GradientStop Color="#000A84FF" Offset="1" />
+                </RadialGradientBrush>
+            </Ellipse.Fill>
+        </Ellipse>
+
         <ScrollView>
-            <VerticalStackLayout Spacing="24" MaximumWidthRequest="480" HorizontalOptions="Center" VerticalOptions="Center">
+            <Grid Padding="40" RowDefinitions="*,Auto">
+                <VerticalStackLayout Grid.Row="0" Spacing="24" MaximumWidthRequest="460"
+                                     HorizontalOptions="Center" VerticalOptions="Center">
 
-                <!-- Hero / branding -->
-                <VerticalStackLayout Spacing="8" Margin="0,0,0,16">
-                    <Border BackgroundColor="#FFFFFF" StrokeThickness="0"
-                            StrokeShape="RoundRectangle 64"
-                            HeightRequest="128" WidthRequest="128" HorizontalOptions="Center">
-                        <Image Source="logo.png" HeightRequest="96" WidthRequest="96"
-                               Aspect="AspectFit" HorizontalOptions="Center" VerticalOptions="Center" />
-                    </Border>
-                    <Label Text="My Robotics" FontSize="32" FontAttributes="Bold"
-                           TextColor="{StaticResource ColorTextPrimary}" HorizontalOptions="Center" Margin="0,8,0,0" />
-                    <Label Text="Kanal Görüntüleme Sistemi" FontSize="13"
-                           TextColor="{StaticResource ColorTextSecondary}" HorizontalOptions="Center" />
-                </VerticalStackLayout>
+                    <!-- ════ Marka kahramanı ════ -->
+                    <VerticalStackLayout x:Name="HeroBlock" Spacing="10" Margin="0,0,0,8">
+                        <Border x:Name="LogoRing" BackgroundColor="#FFFFFF" StrokeThickness="2"
+                                Stroke="#C6A15B" StrokeShape="RoundRectangle 70"
+                                HeightRequest="132" WidthRequest="132" HorizontalOptions="Center">
+                            <Border.Shadow>
+                                <Shadow Brush="#C6A15B" Offset="0,0" Radius="38" Opacity="0.45" />
+                            </Border.Shadow>
+                            <Image Source="logo.png" HeightRequest="96" WidthRequest="96"
+                                   Aspect="AspectFit" HorizontalOptions="Center" VerticalOptions="Center" />
+                        </Border>
+                        <Label Text="H M A   T E K N İ K" FontSize="11" FontAttributes="Bold"
+                               CharacterSpacing="3" TextColor="#C6A15B"
+                               HorizontalOptions="Center" Margin="0,14,0,0" />
+                        <Label Text="My Robotics" FontSize="34" FontAttributes="Bold"
+                               TextColor="White" HorizontalOptions="Center" Margin="0,-6,0,0" />
+                        <Label Text="Kanal Görüntüleme &amp; Denetim Sistemi" FontSize="13"
+                               TextColor="#AEB1BC" HorizontalOptions="Center" />
+                    </VerticalStackLayout>
 
-                <!-- ============== PROFILE PICKER MODE ============== -->
-                <VerticalStackLayout Spacing="12" IsVisible="{Binding IsCreating, Converter={StaticResource InvertedBool}}">
+                    <!-- ════ Cam panel: profil seç / oluştur ════ -->
+                    <Border x:Name="GlassPanel" Background="#B8141620" Stroke="#33FFFFFF"
+                            StrokeThickness="1" StrokeShape="RoundRectangle 20" Padding="24,20">
 
-                    <Label Text="PROFİL SEÇ" Style="{StaticResource SectionTitle}" HorizontalOptions="Center" />
+                        <VerticalStackLayout Spacing="14">
 
-                    <CollectionView ItemsSource="{Binding Profiles}"
-                                    SelectedItem="{Binding SelectedProfile}"
-                                    SelectionMode="Single"
-                                    MaximumHeightRequest="320">
-                        <CollectionView.EmptyView>
-                            <Label Text="Henüz profil yok"
-                                   Style="{StaticResource Caption}" HorizontalOptions="Center" />
-                        </CollectionView.EmptyView>
-                        <CollectionView.ItemTemplate>
-                            <DataTemplate x:DataType="m:Profile">
-                                <Border Style="{StaticResource CardBorder}" Margin="0,0,0,8">
-                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
-                                        <Border Grid.Column="0"
-                                                Background="{StaticResource ColorSurfaceHigh}"
-                                                StrokeShape="RoundRectangle 24"
-                                                HeightRequest="48" WidthRequest="48"
-                                                StrokeThickness="0">
-                                            <Label Text="👤" FontSize="22"
-                                                   HorizontalOptions="Center" VerticalOptions="Center" />
-                                        </Border>
-                                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
-                                            <Label Text="{Binding Name}" Style="{StaticResource CardTitle}" />
-                                            <Label Text="{Binding Email}" Style="{StaticResource Caption}"
-                                                   IsVisible="{Binding Email, Converter={StaticResource StringNotEmpty}}" />
-                                            <Label Text="🔒 PIN korumalı" FontSize="10"
-                                                   TextColor="{StaticResource ColorWarning}"
-                                                   IsVisible="{Binding Pin, Converter={StaticResource StringNotEmpty}}" />
-                                        </VerticalStackLayout>
-                                        <Button Grid.Column="2" Text="🗑"
-                                                Style="{StaticResource QuietButton}"
-                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:LoginViewModel}}, Path=DeleteCommand}"
-                                                CommandParameter="{Binding .}" />
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </CollectionView.ItemTemplate>
-                    </CollectionView>
+                            <!-- PROFILE PICKER MODE -->
+                            <VerticalStackLayout Spacing="12"
+                                                 IsVisible="{Binding IsCreating, Converter={StaticResource InvertedBool}}">
+                                <Label Text="OPERATÖR SEÇ" FontSize="11" FontAttributes="Bold"
+                                       CharacterSpacing="1.6" TextColor="#7E828F" HorizontalOptions="Center" />
 
-                    <Entry Text="{Binding PinInput}" Placeholder="PIN"
-                           Keyboard="Numeric" IsPassword="True" MaxLength="6"
-                           IsVisible="{Binding NeedsPin}" />
+                                <CollectionView ItemsSource="{Binding Profiles}"
+                                                SelectedItem="{Binding SelectedProfile}"
+                                                SelectionMode="Single"
+                                                MaximumHeightRequest="300">
+                                    <CollectionView.EmptyView>
+                                        <Label Text="Henüz profil yok" FontSize="12"
+                                               TextColor="#7E828F" HorizontalOptions="Center" />
+                                    </CollectionView.EmptyView>
+                                    <CollectionView.ItemTemplate>
+                                        <DataTemplate x:DataType="m:Profile">
+                                            <Border Background="#14FFFFFF" Stroke="#26FFFFFF" StrokeThickness="1"
+                                                    StrokeShape="RoundRectangle 14" Padding="12,10" Margin="0,0,0,8">
+                                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                                    <Border Grid.Column="0" StrokeThickness="1.5" Stroke="#C6A15B"
+                                                            StrokeShape="RoundRectangle 24"
+                                                            HeightRequest="48" WidthRequest="48">
+                                                        <Border.Background>
+                                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                                <GradientStop Color="#2A2310" Offset="0" />
+                                                                <GradientStop Color="#171205" Offset="1" />
+                                                            </LinearGradientBrush>
+                                                        </Border.Background>
+                                                        <Label Text="{Binding Initials}" FontSize="17" FontAttributes="Bold"
+                                                               TextColor="#DDB97A"
+                                                               HorizontalOptions="Center" VerticalOptions="Center" />
+                                                    </Border>
+                                                    <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                                        <Label Text="{Binding Name}" FontSize="15" FontAttributes="Bold"
+                                                               TextColor="White" />
+                                                        <Label Text="{Binding LastLoginText}" FontSize="11"
+                                                               TextColor="#7E828F" />
+                                                    </VerticalStackLayout>
+                                                    <HorizontalStackLayout Grid.Column="2" Spacing="6" VerticalOptions="Center">
+                                                        <Label Text="🔒" FontSize="13" VerticalOptions="Center"
+                                                               IsVisible="{Binding HasPin}" />
+                                                        <Button Text="🗑" FontSize="13" Padding="6,2"
+                                                                BackgroundColor="Transparent" TextColor="#7E828F"
+                                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:LoginViewModel}}, Path=DeleteCommand}"
+                                                                CommandParameter="{Binding .}" />
+                                                    </HorizontalStackLayout>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </CollectionView.ItemTemplate>
+                                </CollectionView>
 
-                    <Button Text="Giriş Yap"
-                            Style="{StaticResource PrimaryButton}"
-                            Command="{Binding LoginCommand}"
-                            IsEnabled="{Binding HasProfiles}" />
+                                <Entry Text="{Binding PinInput}" Placeholder="PIN"
+                                       BackgroundColor="#14FFFFFF" TextColor="White" PlaceholderColor="#7E828F"
+                                       Keyboard="Numeric" IsPassword="True" MaxLength="6"
+                                       HorizontalTextAlignment="Center"
+                                       IsVisible="{Binding NeedsPin}" />
 
-                    <Button Text="+ Yeni Profil Oluştur"
-                            Style="{StaticResource SecondaryButton}"
-                            Command="{Binding ShowCreateCommand}" />
-                </VerticalStackLayout>
+                                <Button Text="Giriş Yap" FontSize="15" FontAttributes="Bold"
+                                        TextColor="#1A1404" CornerRadius="12" HeightRequest="48"
+                                        Command="{Binding LoginCommand}"
+                                        IsEnabled="{Binding HasProfiles}">
+                                    <Button.Background>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                            <GradientStop Color="#DDB97A" Offset="0" />
+                                            <GradientStop Color="#C6A15B" Offset="1" />
+                                        </LinearGradientBrush>
+                                    </Button.Background>
+                                </Button>
 
-                <!-- ============== CREATE MODE ============== -->
-                <VerticalStackLayout Spacing="12" IsVisible="{Binding IsCreating}">
-                    <Label Text="YENİ PROFİL" Style="{StaticResource SectionTitle}" HorizontalOptions="Center" />
-
-                    <Border Style="{StaticResource CardBorder}">
-                        <VerticalStackLayout Spacing="10">
-                            <VerticalStackLayout>
-                                <Label Text="Ad Soyad" Style="{StaticResource Caption}" />
-                                <Entry Text="{Binding NewName}" Placeholder="örn. Adem Dağcayır" />
+                                <Button Text="+ Yeni Profil Oluştur" FontSize="13"
+                                        BackgroundColor="Transparent" TextColor="#AEB1BC"
+                                        BorderColor="#33FFFFFF" BorderWidth="1" CornerRadius="12" HeightRequest="42"
+                                        Command="{Binding ShowCreateCommand}" />
                             </VerticalStackLayout>
-                            <VerticalStackLayout>
-                                <Label Text="E-posta (opsiyonel)" Style="{StaticResource Caption}" />
-                                <Entry Text="{Binding NewEmail}" Placeholder="ornek@firma.com" Keyboard="Email" />
+
+                            <!-- CREATE MODE -->
+                            <VerticalStackLayout Spacing="12" IsVisible="{Binding IsCreating}">
+                                <Label Text="YENİ OPERATÖR PROFİLİ" FontSize="11" FontAttributes="Bold"
+                                       CharacterSpacing="1.6" TextColor="#7E828F" HorizontalOptions="Center" />
+
+                                <VerticalStackLayout Spacing="3">
+                                    <Label Text="Ad Soyad" FontSize="11" TextColor="#AEB1BC" />
+                                    <Entry Text="{Binding NewName}" Placeholder="örn. Adem Dağcayır"
+                                           BackgroundColor="#14FFFFFF" TextColor="White" PlaceholderColor="#60656F" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="3">
+                                    <Label Text="E-posta (opsiyonel)" FontSize="11" TextColor="#AEB1BC" />
+                                    <Entry Text="{Binding NewEmail}" Placeholder="ornek@firma.com" Keyboard="Email"
+                                           BackgroundColor="#14FFFFFF" TextColor="White" PlaceholderColor="#60656F" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="3">
+                                    <Label Text="PIN (4-6 rakam, opsiyonel)" FontSize="11" TextColor="#AEB1BC" />
+                                    <Entry Text="{Binding NewPin}" Placeholder="1234"
+                                           Keyboard="Numeric" IsPassword="True" MaxLength="6"
+                                           BackgroundColor="#14FFFFFF" TextColor="White" PlaceholderColor="#60656F" />
+                                </VerticalStackLayout>
+
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                                    <Button Grid.Column="0" Text="İptal" FontSize="13"
+                                            BackgroundColor="Transparent" TextColor="#AEB1BC"
+                                            BorderColor="#33FFFFFF" BorderWidth="1" CornerRadius="12" HeightRequest="44"
+                                            Command="{Binding CancelCreateCommand}"
+                                            IsVisible="{Binding HasProfiles}" />
+                                    <Button Grid.Column="1" Text="✓ Oluştur" FontSize="14" FontAttributes="Bold"
+                                            TextColor="#1A1404" CornerRadius="12" HeightRequest="44"
+                                            Command="{Binding CreateCommand}">
+                                        <Button.Background>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                <GradientStop Color="#DDB97A" Offset="0" />
+                                                <GradientStop Color="#C6A15B" Offset="1" />
+                                            </LinearGradientBrush>
+                                        </Button.Background>
+                                    </Button>
+                                </Grid>
                             </VerticalStackLayout>
-                            <VerticalStackLayout>
-                                <Label Text="PIN (4-6 rakam, opsiyonel)" Style="{StaticResource Caption}" />
-                                <Entry Text="{Binding NewPin}" Placeholder="1234"
-                                       Keyboard="Numeric" IsPassword="True" MaxLength="6" />
-                            </VerticalStackLayout>
+
+                            <Label Text="{Binding ErrorMessage}"
+                                   TextColor="#FF6B61" FontSize="13" FontAttributes="Bold"
+                                   HorizontalOptions="Center" HorizontalTextAlignment="Center"
+                                   IsVisible="{Binding ErrorMessage, Converter={StaticResource StringNotEmpty}}" />
                         </VerticalStackLayout>
                     </Border>
-
-                    <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
-                        <Button Grid.Column="0" Text="İptal"
-                                Style="{StaticResource SecondaryButton}"
-                                Command="{Binding CancelCreateCommand}"
-                                IsVisible="{Binding HasProfiles}" />
-                        <Button Grid.Column="1" Text="✓ Oluştur"
-                                Style="{StaticResource SuccessButton}"
-                                Command="{Binding CreateCommand}" />
-                    </Grid>
                 </VerticalStackLayout>
 
-                <Label Text="{Binding ErrorMessage}"
-                       TextColor="{StaticResource ColorDanger}"
-                       FontSize="13" FontAttributes="Bold"
-                       HorizontalOptions="Center" HorizontalTextAlignment="Center"
-                       IsVisible="{Binding ErrorMessage, Converter={StaticResource StringNotEmpty}}" />
-
-            </VerticalStackLayout>
+                <!-- Alt bilgi -->
+                <Label x:Name="FooterLabel" Grid.Row="1"
+                       Text="Profiller bu cihazda saklanır · Bulut yedekleme Ayarlar'dan hesapla bağlanır"
+                       FontSize="11" TextColor="#60656F"
+                       HorizontalOptions="Center" Margin="0,18,0,0" />
+            </Grid>
         </ScrollView>
     </Grid>
 </ContentPage>

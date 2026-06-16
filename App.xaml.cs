@@ -18,7 +18,6 @@ public partial class App : Application
 
         _services = services;
         _auth = auth;
-        _auth.CurrentProfileChanged += OnAuthChanged;
 
         // Tüm yakalanmamış istisnaları yakalayıp dosyaya yaz — crash teşhis için.
         AppDomain.CurrentDomain.UnhandledException += (_, e) => LogCrash("UnhandledException", e.ExceptionObject as Exception);
@@ -41,6 +40,14 @@ public partial class App : Application
 
     protected override Window CreateWindow(IActivationState? activationState)
     {
+        // Bulut yedek servisini ayağa kaldır + kayıtlı bulut oturumunu sessizce bağla.
+        // Login ekranı kaldırıldı (kullanıcı tercihi: saha aracında sürtünmesiz açılış);
+        // çoklu hesap artık YALNIZCA bulut tarafında (Ayarlar → Bulut Yedek e-posta/parola).
+        // Yerel profil yok → sabit profil kimliği 0 ile bulut oturumu cihaz başına saklanır.
+        _services.GetRequiredService<Services.Cloud.CloudBackupService>().Start();
+        _ = _services.GetRequiredService<Services.Cloud.CloudAuthService>()
+            .AttachProfileAsync(Services.Cloud.CloudAuthService.LocalProfileId);
+
         _window = new Window { Page = BuildRootPage() };
         // Açılışta sessiz otomatik güncelleme (varsa indir + uygula + yeniden başlat)
         _ = TryStartupAutoUpdateAsync();
@@ -80,7 +87,7 @@ public partial class App : Application
 
     private Page BuildRootPage()
     {
-        // Giriş ekranı devre dışı — uygulama doğrudan ana sayfayla açılır.
+        // Login ekranı yok — uygulama doğrudan ana ekrana (AppShell) açılır.
         return _services.GetRequiredService<AppShell>();
     }
 
@@ -93,38 +100,5 @@ public partial class App : Application
             try { _window.Page = BuildRootPage(); }
             catch (Exception ex) { LogCrash("RecreateRoot", ex); }
         });
-    }
-
-    private void OnAuthChanged(object? sender, EventArgs e)
-    {
-        if (_window is null) return;
-        // Login or logout — swap the root page to keep the navigation graph clean.
-        try
-        {
-            MainThread.BeginInvokeOnMainThread(() =>
-            {
-                try
-                {
-                    var newPage = BuildRootPage();
-                    if (newPage is not null)
-                    {
-                        _window.Page = newPage;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    LogCrash("OnAuthChanged.PageSwap.Inner", ex);
-                    try
-                    {
-                        Application.Current?.Windows[0].Page?.DisplayAlert("Hata", $"Geçiş başarısız: {ex.Message}", "Tamam");
-                    }
-                    catch { }
-                }
-            });
-        }
-        catch (Exception ex)
-        {
-            LogCrash("OnAuthChanged.Outer", ex);
-        }
     }
 }

@@ -8,14 +8,15 @@ namespace MyRoboticsInspector.Pages;
 public partial class ProjectChannelsPage : ContentPage
 {
     private readonly ProjectChannelsViewModel _vm;
-    private bool _blinking;
+    private CancellationTokenSource? _blinkCts;
 
     public ProjectChannelsPage(ProjectChannelsViewModel vm)
     {
         InitializeComponent();
         BindingContext = _vm = vm;
         ChannelCanvas.PaintSurface += OnPaintSurface;
-        _vm.Live.PropertyChanged += OnLivePropertyChanged;
+        // DİKKAT: Singleton Live.PropertyChanged aboneliği constructor'da KURULMAZ
+        // (transient sayfa hiç GC edilemezdi) — OnAppearing/OnDisappearing'de kurulup sökülür.
     }
 
     private void OnLivePropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -25,25 +26,26 @@ public partial class ProjectChannelsPage : ContentPage
     }
 
     // Kayıt sürerken kırmızı noktayı yanıp söndür; bitince tam görünür bırak.
+    // Her çağrı önceki döngü neslini iptal eder (CTS) — hızlı durdur/başlat'ta
+    // eski döngünün canlanıp çift animasyon çalıştırması mümkün değildir.
+    // Tümü UI thread'inde çalışır (Dispatcher.Dispatch) — kilit gerekmez.
     private async void UpdateRecBlink()
     {
-        if (_vm.Live.IsRecording)
+        _blinkCts?.Cancel();
+        _blinkCts = null;
+        if (!_vm.Live.IsRecording)
         {
-            if (_blinking) return;
-            _blinking = true;
-            while (_blinking && _vm.Live.IsRecording)
-            {
-                await RecDot.FadeTo(0.15, 450, Easing.SinInOut);
-                await RecDot.FadeTo(1.0, 450, Easing.SinInOut);
-            }
-            _blinking = false;
             RecDot.Opacity = 1;
+            return;
         }
-        else
+        var cts = _blinkCts = new CancellationTokenSource();
+        while (!cts.IsCancellationRequested && _vm.Live.IsRecording)
         {
-            _blinking = false;
-            RecDot.Opacity = 1;
+            await RecDot.FadeTo(0.15, 450, Easing.SinInOut);
+            await RecDot.FadeTo(1.0, 450, Easing.SinInOut);
         }
+        if (ReferenceEquals(_blinkCts, cts)) _blinkCts = null;
+        RecDot.Opacity = 1;
     }
 
     private void OnPipelineFrameReady(object? sender, EventArgs e)
@@ -72,6 +74,10 @@ public partial class ProjectChannelsPage : ContentPage
         base.OnAppearing();
         _vm.Live.Pipeline.FrameReady -= OnPipelineFrameReady; // çift aboneliği önle
         _vm.Live.Pipeline.FrameReady += OnPipelineFrameReady;
+        _vm.Live.PropertyChanged -= OnLivePropertyChanged;    // çift aboneliği önle
+        _vm.Live.PropertyChanged += OnLivePropertyChanged;
+        _vm.Activate(); // VM'in Live aboneliği + buton durumu tazeleme
+        UpdateRecBlink(); // sayfa görünmezken değişen kayıt durumuna göre blink'i senkronla
 
         // Kayıt sürerken listeyi yeniden kurma (seçimi/kaydı bozmasın); aksi hâlde her zaman tazele.
         if (_vm.ProjectId > 0 && !_vm.Live.IsRecording)
@@ -86,5 +92,11 @@ public partial class ProjectChannelsPage : ContentPage
     {
         base.OnDisappearing();
         _vm.Live.Pipeline.FrameReady -= OnPipelineFrameReady;
+        _vm.Live.PropertyChanged -= OnLivePropertyChanged; // singleton'a asılı kalma — sayfa GC edilebilsin
+        _vm.Deactivate();
+        // Görünmeyen sayfada animasyon döngüsü sürmesin
+        _blinkCts?.Cancel();
+        _blinkCts = null;
+        RecDot.Opacity = 1;
     }
 }

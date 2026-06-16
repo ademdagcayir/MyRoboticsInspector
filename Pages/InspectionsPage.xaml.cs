@@ -15,6 +15,14 @@ public partial class InspectionsPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await _vm.LoadAsync();
+        try
+        {
+            await _vm.LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"InspectionsPage.OnAppearing error: {ex}");
+            await DisplayAlert("Hata", $"İncelemeler yüklenirken hata: {ex.Message}", "Tamam");
+        }
     }
 }

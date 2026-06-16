@@ -15,6 +15,14 @@ public partial class CustomersPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await _vm.LoadAsync();
+        try
+        {
+            await _vm.LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"CustomersPage.OnAppearing error: {ex}");
+            await DisplayAlert("Hata", $"Müşteriler yüklenirken hata: {ex.Message}", "Tamam");
+        }
     }
 }

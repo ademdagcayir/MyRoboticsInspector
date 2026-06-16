@@ -106,6 +106,8 @@ public static class MauiProgram
         builder.Services.AddSingleton<IGamepadInput, XInputGamepadService>();
         builder.Services.AddSingleton<GamepadCommandMapper>();
         builder.Services.AddSingleton<UpdateService>();
+        builder.Services.AddSingleton<Services.Cloud.CloudAuthService>();
+        builder.Services.AddSingleton<Services.Cloud.CloudBackupService>();
 
         // ViewModels
         builder.Services.AddTransient<LoginViewModel>();

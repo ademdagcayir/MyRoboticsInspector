@@ -145,56 +145,75 @@ public partial class ChannelEditViewModel : BaseViewModel
 
     public async Task LoadAsync()
     {
-        var conn = await _db.GetConnectionAsync();
-        var existing = await conn.FindAsync<Inspection>(ChannelId);
-        if (existing is null) return;
-
-        EditingChannel = existing;
-        _originalStreet = existing.Street;
-        IsNew = false;
-        ParentProject = await conn.FindAsync<Job>(existing.JobId);
-
-        SelectedFlow = FlowOptions.First(f => f.Value == EditingChannel.FlowDirection);
-        SelectedProjectType = ProjectTypeOptions.First(t => t.Value == EditingChannel.ProjectType);
-        SelectedPipeShape = PipeShapeOptions.First(s => s.Value == EditingChannel.PipeShape);
-        SelectedViewStart = ViewStartOptions.First(v => v.Value == EditingChannel.ViewStart);
-        SelectedCleaned = EditingChannel.Cleaned switch
+        try
         {
-            true => "Evet",
-            false => "Hayır",
-            _ => "Belirsiz"
-        };
+            var conn = await _db.GetConnectionAsync();
+            var existing = await conn.FindAsync<Inspection>(ChannelId);
+            if (existing is null) return;
 
-        Title = $"Kanal {EditingChannel.KanalNo}: {EditingChannel.ChannelCode ?? "—"}";
-        await LoadKnownStreetsAsync(EditingChannel.JobId);
-        SelectedStreet = string.IsNullOrWhiteSpace(EditingChannel.Street) ? null : EditingChannel.Street;
-        await LoadSiblingsAsync(EditingChannel.JobId);
+            EditingChannel = existing;
+            _originalStreet = existing.Street;
+            IsNew = false;
+            ParentProject = await conn.FindAsync<Job>(existing.JobId);
+
+            // DB'de tanımsız (aralık dışı) enum değeri olabilir — First() fırlatmasın, ilk seçeneğe düş
+            SelectedFlow        = FlowOptions.FirstOrDefault(f => f.Value == EditingChannel.FlowDirection) ?? FlowOptions[0];
+            SelectedProjectType = ProjectTypeOptions.FirstOrDefault(t => t.Value == EditingChannel.ProjectType) ?? ProjectTypeOptions[0];
+            SelectedPipeShape   = PipeShapeOptions.FirstOrDefault(s => s.Value == EditingChannel.PipeShape) ?? PipeShapeOptions[0];
+            SelectedViewStart   = ViewStartOptions.FirstOrDefault(v => v.Value == EditingChannel.ViewStart) ?? ViewStartOptions[0];
+            SelectedCleaned = EditingChannel.Cleaned switch
+            {
+                true => "Evet",
+                false => "Hayır",
+                _ => "Belirsiz"
+            };
+
+            Title = $"Kanal {EditingChannel.KanalNo}: {EditingChannel.ChannelCode ?? "—"}";
+            await LoadKnownStreetsAsync(EditingChannel.JobId);
+            SelectedStreet = string.IsNullOrWhiteSpace(EditingChannel.Street) ? null : EditingChannel.Street;
+            await LoadSiblingsAsync(EditingChannel.JobId);
+        }
+        catch (Exception ex)
+        {
+            // Fire-and-forget çağrılıyor (OnChannelIdChanged) — hata sessizce yutulmasın,
+            // operatör boş formun nedenini görsün
+            StatusMessage = $"Kanal yüklenemedi: {ex.Message}";
+        }
     }
 
     /// <summary>Yeni kanal oluştururken — proje ID'si biliniyor ama kanal ID'si yok.</summary>
     public async Task InitNewAsync(int forJobId)
     {
-        var conn = await _db.GetConnectionAsync();
-        ParentProject = await conn.FindAsync<Job>(forJobId);
-        _originalStreet = null;
-        // Mevcut kanalları geriye dönük numaralandır, sonra yeni kanala sıradaki numarayı ver
-        await _db.EnsureKanalNumbersAsync(forJobId);
-        EditingChannel = new Inspection
+        try
         {
-            JobId   = forJobId,
-            KanalNo = await _db.GetNextKanalNoAsync(forJobId)
-        };
-        IsNew = true;
-        ChannelId = 0;
-        SelectedFlow        = null;   // zorunlu — kullanıcı bilinçli seçmeli
-        SelectedProjectType = null;   // zorunlu — Atık Su / Yağmur Suyu seçilmeli
-        SelectedPipeShape   = PipeShapeOptions[0];
-        SelectedViewStart   = ViewStartOptions[0];
-        SelectedCleaned     = "Belirsiz";
-        SelectedStreet      = null;
-        Title = "Yeni Kanal";
-        await LoadKnownStreetsAsync(forJobId);
-        await LoadSiblingsAsync(forJobId);
+            var conn = await _db.GetConnectionAsync();
+            ParentProject = await conn.FindAsync<Job>(forJobId);
+            _originalStreet = null;
+            // Mevcut kanalları geriye dönük numaralandır, sonra yeni kanala sıradaki numarayı ver
+            await _db.EnsureKanalNumbersAsync(forJobId);
+            EditingChannel = new Inspection
+            {
+                JobId   = forJobId,
+                KanalNo = await _db.GetNextKanalNoAsync(forJobId)
+            };
+            IsNew = true;
+            ChannelId = 0;
+            SelectedFlow        = null;   // zorunlu — kullanıcı bilinçli seçmeli
+            SelectedProjectType = null;   // zorunlu — Atık Su / Yağmur Suyu seçilmeli
+            SelectedPipeShape   = PipeShapeOptions[0];
+            SelectedViewStart   = ViewStartOptions[0];
+            SelectedCleaned     = "Belirsiz";
+            SelectedStreet      = null;
+            Title = "Yeni Kanal";
+            await LoadKnownStreetsAsync(forJobId);
+            await LoadSiblingsAsync(forJobId);
+        }
+        catch (Exception ex)
+        {
+            // Hem fire-and-forget (OnJobIdChanged) hem async void OnNavigatedTo çağırıyor —
+            // istisna kaçarsa WinUI'de sessiz çöküş/boş form olur, burada yakala
+            StatusMessage = $"Form hazırlanamadı: {ex.Message}";
+        }
     }
 
     private async Task LoadSiblingsAsync(int jobId)
@@ -241,8 +260,8 @@ public partial class ChannelEditViewModel : BaseViewModel
     }
 
     /// <summary>
-    /// Sokak adı düzenlendiyse: yeni sokak klasörünü oluştur, varsa videoyu ve resim
-    /// klasörünü taşı, eski sokak klasöründe hiç video kalmadıysa onu sil.
+    /// Sokak adı düzenlendiyse: yeni sokak klasörünü oluştur, varsa videoyu, resim,
+    /// rapor ve eğim dosyalarını taşı; eski sokak klasöründe hiç dosya kalmadıysa onu sil.
     /// </summary>
     private async Task ReconcileStreetFolderAsync()
     {
@@ -308,9 +327,38 @@ public partial class ChannelEditViewModel : BaseViewModel
                 }
             }
 
-            // Eski sokak klasöründe hiç video yoksa sil
+            // ── Rapor + eğim dosyaları: bu kanalın eski köküyle başlayanları yeni sokağa taşı ──
+            // (Dosya adındaki eski kanal kökünü — "stem" ya da "_stem" önekli — yenisiyle değiştirir.
+            //  Başka kanalların dosyalarına DOKUNMAZ.)
+            void MoveStemFiles(string fromDir, string toDir)
+            {
+                if (!Directory.Exists(fromDir)) return;
+                foreach (var src in Directory.GetFiles(fromDir))
+                {
+                    var fn = Path.GetFileName(src);
+                    string movedFn;
+                    if (fn.StartsWith(oldStem, StringComparison.Ordinal))
+                        movedFn = newStem + fn.Substring(oldStem.Length);
+                    else if (fn.StartsWith("_" + oldStem, StringComparison.Ordinal))
+                        movedFn = "_" + newStem + fn.Substring(oldStem.Length + 1);
+                    else
+                        continue; // başka kanalın dosyası
+                    Directory.CreateDirectory(toDir);
+                    var dst = Path.Combine(toDir, movedFn);
+                    if (string.Equals(dst, src, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (File.Exists(dst)) { try { File.Delete(dst); } catch { } }
+                    File.Move(src, dst);
+                }
+            }
+            MoveStemFiles(StoragePaths.ReportsDir(root, ParentProject.Title, hood, oldStreet),
+                          StoragePaths.ReportsDir(root, ParentProject.Title, hood, newStreet));
+            MoveStemFiles(StoragePaths.EgimDir(root, ParentProject.Title, hood, oldStreet),
+                          StoragePaths.EgimDir(root, ParentProject.Title, hood, newStreet));
+
+            // Eski sokak klasöründe hiç dosya kalmadıysa sil. (Yalnız videoya bakmak YETMEZ:
+            // aynı sokağı paylaşan başka kanalların fotoğraf/rapor/eğim dosyaları silinirdi.)
             if (Directory.Exists(oldDir) &&
-                !Directory.EnumerateFiles(oldDir, "*.mp4", SearchOption.AllDirectories).Any())
+                !Directory.EnumerateFiles(oldDir, "*", SearchOption.AllDirectories).Any())
             {
                 try { Directory.Delete(oldDir, recursive: true); } catch { /* yoksay */ }
             }
@@ -323,9 +371,24 @@ public partial class ChannelEditViewModel : BaseViewModel
         }
     }
 
+    /// <summary>
+    /// Yükleme başarısız/yarım kaldıysa kaydetmeyi reddet — JobId=0 öksüz kayıt
+    /// ya da boş formla mevcut kaydın ezilmesi olmasın.
+    /// </summary>
+    private bool CanPersist()
+    {
+        if (EditingChannel.JobId <= 0 || (ChannelId > 0 && EditingChannel.Id == 0))
+        {
+            StatusMessage = "Form yüklenemedi — sayfayı kapatıp yeniden açın";
+            return false;
+        }
+        return true;
+    }
+
     [RelayCommand]
     private async Task SaveAsync()
     {
+        if (!CanPersist()) return;
         if (!await ValidateRequiredAsync()) return;
 
         EditingChannel.FlowDirection = SelectedFlow?.Value ?? FlowDirection.Downstream;
@@ -339,35 +402,55 @@ public partial class ChannelEditViewModel : BaseViewModel
             _       => null
         };
 
-        await _db.SaveInspectionAsync(EditingChannel);
+        try
+        {
+            await _db.SaveInspectionAsync(EditingChannel);
+        }
+        catch (Exception ex)
+        {
+            // Disk dolu / dosya kilidi / DB hatası: kayıt YAPILMADI — kullanıcı net bilmeli
+            StatusMessage = $"Kaydedilemedi: {ex.Message}";
+            await Shell.Current.DisplayAlert("Kaydedilemedi",
+                $"Kanal kaydedilemedi:\n{ex.Message}", "Tamam");
+            return;
+        }
 
         var savedJobId = EditingChannel.JobId;
         var wasNew     = ChannelId == 0;
 
-        // Düzenleme modunda sokak değiştiyse klasörleri uzlaştır
+        // Düzenleme modunda sokak değiştiyse klasörleri uzlaştır (kendi içinde try/catch'li)
         if (!wasNew) await ReconcileStreetFolderAsync();
 
-        // Listeyi yenile (kaydedilen kanalı göster)
-        await LoadSiblingsAsync(savedJobId);
+        try
+        {
+            // Listeyi yenile (kaydedilen kanalı göster)
+            await LoadSiblingsAsync(savedJobId);
 
-        if (wasNew)
-        {
-            // Yeni kanal modunda: formu sıfırla — sayfada kal, bir sonraki kanalı girebilsin
-            ChannelId = 0;
-            await InitNewAsync(savedJobId);
-            StatusMessage = $"Kanal kaydedildi ✓  —  yeni kanal girebilirsiniz";
+            if (wasNew)
+            {
+                // Yeni kanal modunda: formu sıfırla — sayfada kal, bir sonraki kanalı girebilsin
+                ChannelId = 0;
+                await InitNewAsync(savedJobId);
+                StatusMessage = $"Kanal kaydedildi ✓  —  yeni kanal girebilirsiniz";
+            }
+            else
+            {
+                // Düzenleme modunda: kapat
+                StatusMessage = "Kanal güncellendi";
+                await Shell.Current.GoToAsync("..");
+            }
         }
-        else
+        catch (Exception ex)
         {
-            // Düzenleme modunda: kapat
-            StatusMessage = "Kanal güncellendi";
-            await Shell.Current.GoToAsync("..");
+            // Kayıt başarılı ama sonrası (liste/navigasyon) düştü — çökme yerine durum mesajı
+            StatusMessage = $"Kanal kaydedildi, ekran yenilenemedi: {ex.Message}";
         }
     }
 
     [RelayCommand]
     private async Task SaveAndCloseAsync()
     {
+        if (!CanPersist()) return;
         if (!await ValidateRequiredAsync()) return;
 
         EditingChannel.FlowDirection = SelectedFlow?.Value ?? FlowDirection.Downstream;
@@ -380,7 +463,18 @@ public partial class ChannelEditViewModel : BaseViewModel
             "Hayır" => false,
             _       => null
         };
-        await _db.SaveInspectionAsync(EditingChannel);
+        try
+        {
+            await _db.SaveInspectionAsync(EditingChannel);
+        }
+        catch (Exception ex)
+        {
+            // Disk dolu / dosya kilidi / DB hatası: kayıt YAPILMADI — kullanıcı net bilmeli
+            StatusMessage = $"Kaydedilemedi: {ex.Message}";
+            await Shell.Current.DisplayAlert("Kaydedilemedi",
+                $"Kanal kaydedilemedi:\n{ex.Message}", "Tamam");
+            return;
+        }
         await ReconcileStreetFolderAsync();
         await Shell.Current.GoToAsync("..");
     }
@@ -433,8 +527,19 @@ public partial class ChannelEditViewModel : BaseViewModel
             "Sil", "Vazgeç");
         if (!confirmed) return;
 
-        var conn = await _db.GetConnectionAsync();
-        await conn.DeleteAsync(EditingChannel);
+        try
+        {
+            var conn = await _db.GetConnectionAsync();
+            await conn.DeleteAsync(EditingChannel);
+        }
+        catch (Exception ex)
+        {
+            // DB hatası: silme YAPILMADI — sayfada kal, kullanıcı bilsin
+            StatusMessage = $"Silinemedi: {ex.Message}";
+            await Shell.Current.DisplayAlert("Silinemedi",
+                $"Kanal silinemedi:\n{ex.Message}", "Tamam");
+            return;
+        }
         await Shell.Current.GoToAsync("..");
     }
 }

@@ -34,7 +34,6 @@ public partial class InspectionReviewViewModel : BaseViewModel
 {
     private readonly VideoService _video;
     private readonly DatabaseService _db;
-    private IDispatcherTimer? _pollTimer;
 
     public ObservableCollection<Defect> Defects { get; } = new();
     public ObservableCollection<DefectMarker> Markers { get; } = new();
@@ -62,7 +61,17 @@ public partial class InspectionReviewViewModel : BaseViewModel
 
     partial void OnInspectionIdChanged(int value)
     {
-        if (value > 0) _ = LoadAsync();
+        if (value > 0) SafeLoad();
+    }
+
+    /// <summary>Fire-and-forget LoadAsync'i güvenle çalıştırır — hata sessizce kaybolmaz.</summary>
+    private async void SafeLoad()
+    {
+        try { await LoadAsync(); }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Yükleme hatası: {ex.Message}";
+        }
     }
 
     public async Task LoadAsync()
@@ -99,6 +108,17 @@ public partial class InspectionReviewViewModel : BaseViewModel
         var defects = await _db.GetDefectsAsync(InspectionId);
         Defects.Clear();
         foreach (var d in defects) Defects.Add(d);
+
+        // Gerçek video süresi DB'de saklanmıyor — inceleme başlangıç/bitiş zamanından
+        // türet; yoksa en geç kusur zamanına normalize et ki işaretçiler şeride
+        // orantılı dağılsın (eskiden hepsi 1 ms'e bölünüp en sağa yığılıyordu).
+        long durationMs = 0;
+        if (Inspection.FinishedAt is DateTime finished && finished > Inspection.StartedAt)
+            durationMs = (long)(finished - Inspection.StartedAt).TotalMilliseconds;
+        var maxDefectMs = Defects.Count > 0 ? Defects.Max(d => d.VideoTimestampMs) : 0;
+        TotalLengthMs = Math.Max(1, Math.Max(durationMs, maxDefectMs));
+        TotalTimeDisplay = TimeSpan.FromMilliseconds(TotalLengthMs).ToString(@"hh\:mm\:ss");
+
         RebuildMarkers();
     }
 
@@ -184,8 +204,6 @@ public partial class InspectionReviewViewModel : BaseViewModel
 
     public void Cleanup()
     {
-        _pollTimer?.Stop();
-        _pollTimer = null;
         _video.Stop();
     }
 }

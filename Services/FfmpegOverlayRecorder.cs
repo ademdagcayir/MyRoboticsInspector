@@ -24,6 +24,9 @@ public sealed class FfmpegOverlayRecorder : IAsyncDisposable
     private string? _sessionDir;
     private string? _meterPath;
     private string? _nowPath;
+    private string? _tiltPath;
+    private VideoOverlayModel? _overlay;   // eğim değeri buradan (VM 100ms'de günceller)
+    private double? _smoothMeters;          // metre ramp yumuşatma (zıplama yok)
     private System.Threading.Timer? _writer;
     private double _recOffsetSeconds = 0.25;
     private DateTime _startTime;   // video zaman sayacı bundan hesaplanır (00:00'dan)
@@ -71,54 +74,61 @@ public sealed class FfmpegOverlayRecorder : IAsyncDisposable
         if (IsRecording) await StopAsync();
         _recOffsetSeconds = recOffsetSeconds;
 
-        var outDir = Path.GetDirectoryName(outputPath);
-        if (!string.IsNullOrEmpty(outDir)) Directory.CreateDirectory(outDir);
-
-        _sessionDir = Path.Combine(Path.GetTempPath(), $"mri_ovl_{Guid.NewGuid():N}");
-        Directory.CreateDirectory(_sessionDir);
-        _meterPath = Path.Combine(_sessionDir, "meter.txt");
-        _nowPath   = Path.Combine(_sessionDir, "now.txt");
-
-        // Statik alanlar (bir kez)
-        WriteAtomic(Path.Combine(_sessionDir, "company.txt"),  model.CompanyName ?? "");
-        WriteAtomic(Path.Combine(_sessionDir, "project.txt"),  model.ProjectName ?? "");
-        WriteAtomic(Path.Combine(_sessionDir, "location.txt"), model.Location ?? "");
-        var baca = new List<string>();
-        if (!string.IsNullOrWhiteSpace(model.ManholeIn))  baca.Add($"Giriş: {model.ManholeIn}");
-        if (!string.IsNullOrWhiteSpace(model.ManholeOut)) baca.Add($"Çıkış: {model.ManholeOut}");
-        WriteAtomic(Path.Combine(_sessionDir, "manhole.txt"), string.Join("    ", baca));
-        WriteAtomic(Path.Combine(_sessionDir, "flow.txt"),
-            string.IsNullOrWhiteSpace(model.FlowText) ? "" : $"Akış yönü: {model.FlowText}");
-        // Dinamik (timer yazar) — video zaman sayacı 00:00'dan.
-        // NOT: reload=1 ile ffmpeg her karede okur → paylaşımlı yazma (WriteShared) kullanılır,
-        // atomik rename DEĞİL (rename Windows'ta okuma anında 'Permission denied' → ffmpeg -13 ile ölür).
-        _startTime = DateTime.Now;
-        WriteShared(_meterPath, " ");
-        WriteShared(_nowPath, "00:00");
-
-        // Filtre script — komut-satırı escape cehennemini bypass eder
-        int h = videoHeight > 0 ? videoHeight : 2160;
-        double s = Math.Clamp(fontScale <= 0 ? 1.0 : fontScale, 0.4, 3.0);
-        var (reg, bold) = FontFiles(fontFamily);
-        var filterPath = Path.Combine(_sessionDir, "overlay.filter");
-        File.WriteAllText(filterPath, BuildFilterScript(h, s, reg, bold), new UTF8Encoding(false));
-
-        // Encoder seç (probe + cache)
-        var enc = await ResolveEncoderAsync(ffmpegPath, encoderPref ?? "auto");
-
-        var args = BuildArgs(rtspUrl, outputPath, filterPath, enc);
-
-        var psi = new ProcessStartInfo(ffmpegPath, args)
-        {
-            UseShellExecute = false,
-            RedirectStandardInput = true,
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
-            CreateNoWindow = true,
-            WorkingDirectory = FontsDir(),
-        };
+        // Kurulum dahil TÜM gövde try içinde: geçersiz kayıt klasörü (sökülmüş USB),
+        // yazılamayan %TEMP% vb. exception'ları çağırana sızdırmaz (sözleşme: false + Error event).
         try
         {
+            var outDir = Path.GetDirectoryName(outputPath);
+            if (!string.IsNullOrEmpty(outDir)) Directory.CreateDirectory(outDir);
+
+            _sessionDir = Path.Combine(Path.GetTempPath(), $"mri_ovl_{Guid.NewGuid():N}");
+            Directory.CreateDirectory(_sessionDir);
+            _meterPath = Path.Combine(_sessionDir, "meter.txt");
+            _nowPath   = Path.Combine(_sessionDir, "now.txt");
+
+            // Statik alanlar (bir kez)
+            WriteAtomic(Path.Combine(_sessionDir, "company.txt"),  model.CompanyName ?? "");
+            WriteAtomic(Path.Combine(_sessionDir, "project.txt"),  model.ProjectName ?? "");
+            WriteAtomic(Path.Combine(_sessionDir, "location.txt"), model.Location ?? "");
+            var baca = new List<string>();
+            if (!string.IsNullOrWhiteSpace(model.ManholeIn))  baca.Add($"Giriş: {model.ManholeIn}");
+            if (!string.IsNullOrWhiteSpace(model.ManholeOut)) baca.Add($"Çıkış: {model.ManholeOut}");
+            WriteAtomic(Path.Combine(_sessionDir, "manhole.txt"), string.Join("    ", baca));
+            WriteAtomic(Path.Combine(_sessionDir, "flow.txt"),
+                string.IsNullOrWhiteSpace(model.FlowText) ? "" : $"Akış yönü: {model.FlowText}");
+            // Dinamik (timer yazar) — video zaman sayacı 00:00'dan.
+            // NOT: reload=1 ile ffmpeg her karede okur → paylaşımlı yazma (WriteShared) kullanılır,
+            // atomik rename DEĞİL (rename Windows'ta okuma anında 'Permission denied' → ffmpeg -13 ile ölür).
+            _startTime = DateTime.Now;
+            _tiltPath = Path.Combine(_sessionDir, "tilt.txt");
+            _overlay = model;
+            _smoothMeters = null;
+            WriteShared(_meterPath, " ");
+            WriteShared(_nowPath, "00:00");
+            WriteShared(_tiltPath, " ");
+
+            // Filtre script — komut-satırı escape cehennemini bypass eder
+            int h = videoHeight > 0 ? videoHeight : 2160;
+            double s = Math.Clamp(fontScale <= 0 ? 1.0 : fontScale, 0.4, 3.0);
+            var (reg, bold) = FontFiles(fontFamily);
+            var filterPath = Path.Combine(_sessionDir, "overlay.filter");
+            File.WriteAllText(filterPath, BuildFilterScript(h, s, reg, bold), new UTF8Encoding(false));
+
+            // Encoder seç (probe + cache)
+            var enc = await ResolveEncoderAsync(ffmpegPath, encoderPref ?? "auto");
+
+            var args = BuildArgs(rtspUrl, outputPath, filterPath, enc);
+
+            var psi = new ProcessStartInfo(ffmpegPath, args)
+            {
+                UseShellExecute = false,
+                RedirectStandardInput = true,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true,
+                WorkingDirectory = FontsDir(),
+            };
+
             _stopping = false;
             lock (_errLock) _errTail.Clear();
 
@@ -213,6 +223,7 @@ public sealed class FfmpegOverlayRecorder : IAsyncDisposable
         int fBody  = Math.Max(14, (int)(h * 0.030 * s));
         int fTitle = Math.Max(18, (int)(h * 0.030 * 1.20 * s));
         int fMeter = Math.Max(28, (int)(h * 0.085 * s));
+        int fTilt  = Math.Max(20, (int)(h * 0.055 * s));
         int pad    = Math.Max(8,  (int)(h * 0.022));
         int border = Math.Max(4,  (int)(fBody * 0.25));
 
@@ -233,6 +244,8 @@ public sealed class FfmpegOverlayRecorder : IAsyncDisposable
         c.Add($"drawtext=textfile='{Tf("now.txt")}':reload=1:expansion=none:fontfile='{fr}':x=w-tw-{pad}:y={pad}:fontsize={fBody}:fontcolor=white:{Box()}");
         // Alt-sol: büyük metre
         c.Add($"drawtext=textfile='{Tf("meter.txt")}':reload=1:expansion=none:fontfile='{fb}':x={pad}:y=h-{fMeter + pad}:fontsize={fMeter}:fontcolor=0xFFD60A:{Box()}");
+        // Alt-sağ: eğim (kalibre °)
+        c.Add($"drawtext=textfile='{Tf("tilt.txt")}':reload=1:expansion=none:fontfile='{fb}':x=w-tw-{pad}:y=h-{fTilt + pad}:fontsize={fTilt}:fontcolor=white:{Box()}");
 
         // setpts BAŞTA (MP4 0'dan başlasın), format SONDA (encoder uyumu)
         return "setpts=PTS-STARTPTS," + string.Join(",", c) + ",format=yuv420p";
@@ -297,11 +310,23 @@ public sealed class FfmpegOverlayRecorder : IAsyncDisposable
     {
         try
         {
-            var m = _sync.MetersAt(_sync.NowSeconds - _recOffsetSeconds);
-            if (m is double v && _meterPath is not null)             // BOŞ değer → son metreyi koru (flicker yok)
-                WriteShared(_meterPath, v.ToString("0.00", CultureInfo.InvariantCulture) + " m");
+            // Metre: RAMP yumuşatma (zıplama yok) — hedefe doğru üstel ease (10Hz tick).
+            var target = _sync.MetersAt(_sync.NowSeconds - _recOffsetSeconds);
+            if (target is double tg && _meterPath is not null)       // BOŞ değer → son metreyi koru
+            {
+                _smoothMeters = _smoothMeters is double cur ? cur + (tg - cur) * 0.25 : tg;
+                if (Math.Abs(tg - _smoothMeters.Value) < 0.005) _smoothMeters = tg;
+                WriteShared(_meterPath, _smoothMeters.Value.ToString("0.00", CultureInfo.InvariantCulture) + " m");
+            }
             if (_nowPath is not null)
                 WriteShared(_nowPath, FormatClock(DateTime.Now - _startTime));
+            if (_tiltPath is not null)
+            {
+                var td = _overlay?.TiltDegrees;
+                WriteShared(_tiltPath, td is double t
+                    ? t.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) + "°"
+                    : " ");
+            }
         }
         catch { }
     }
@@ -364,7 +389,8 @@ public sealed class FfmpegOverlayRecorder : IAsyncDisposable
         if (_sessionDir is not null)
         {
             try { Directory.Delete(_sessionDir, recursive: true); } catch { }
-            _sessionDir = null; _meterPath = null; _nowPath = null;
+            _sessionDir = null; _meterPath = null; _nowPath = null; _tiltPath = null;
+            _overlay = null; _smoothMeters = null;
         }
     }
 

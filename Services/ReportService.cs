@@ -28,7 +28,8 @@ public class ReportService
         var fileName = $"Inceleme_{inspectionId}_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
         var fullPath = Path.Combine(outputDir, fileName);
 
-        ReportRenderer.Render(settings, inspection, job, customer, defects, fullPath);
+        // PDF kompozisyonu + fotoğraf decode CPU işi — UI thread'ini dondurmasın diye arka plana al
+        await Task.Run(() => ReportRenderer.Render(settings, inspection, job, customer, defects, fullPath));
         return fullPath;
     }
 
@@ -75,8 +76,13 @@ public class ReportService
             StoragePaths.Report13508FileName(inspection.KanalNo, inspection.Street,
                 inspection.EntryManhole, inspection.ExitManhole, fallback));
 
-        ChannelReportRenderer.RenderClassic(settings, job, customer, inspection, defects, classicPath);
-        ChannelReportRenderer.Render13508(settings, job, customer, inspection, defects, stdPath);
+        // PDF kompozisyonu + her kusur kartı için JPEG decode senkron CPU işi —
+        // UI thread'ini (Kanal Sonu akışında canlı önizleme/kayıt dahil) dondurmasın diye arka plana al
+        await Task.Run(() =>
+        {
+            ChannelReportRenderer.RenderClassic(settings, job, customer, inspection, defects, classicPath);
+            ChannelReportRenderer.Render13508(settings, job, customer, inspection, defects, stdPath);
+        });
 
         return (classicPath, stdPath);
     }

@@ -17,4 +17,10 @@ public partial class SettingsPage : ContentPage
         base.OnAppearing();
         await _vm.LoadAsync();
     }
+
+    protected override void OnDisappearing()
+    {
+        base.OnDisappearing();
+        _vm.Cleanup(); // transient VM — singleton event aboneliklerini bırak
+    }
 }

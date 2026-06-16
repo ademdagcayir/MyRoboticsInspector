@@ -147,7 +147,7 @@
 
                                     <Label Grid.Row="1" Grid.Column="0" Text="Basınç" FontSize="11" TextColor="#8A8F9C" />
                                     <Label Grid.Row="1" Grid.Column="1" FontSize="12" TextColor="White"
-                                           Text="{Binding Telemetry.PressureBar, StringFormat='{0:0.0} bar', TargetNullValue='—'}" />
+                                           Text="{Binding Telemetry.PressurePercent, StringFormat='{0:0}%', TargetNullValue='—'}" />
                                     <Label Grid.Row="1" Grid.Column="2" Text="Sıcaklık" FontSize="11" TextColor="#8A8F9C" />
                                     <Label Grid.Row="1" Grid.Column="3" FontSize="12" TextColor="White"
                                            Text="{Binding Telemetry.TemperatureC, StringFormat='{0:0.0}°C', TargetNullValue='—'}" />
@@ -357,6 +357,25 @@
                                HorizontalOptions="Center" HorizontalTextAlignment="Center"
                                IsVisible="{Binding StatusMessage, Converter={StaticResource StringNotEmpty}}" />
                     </VerticalStackLayout>
+
+                    <!-- BASINÇ BARI — stream'in altında, pil tarzı renkli dolum (60+ yeşil / 40-60 turuncu / <40 kırmızı) -->
+                    <Border VerticalOptions="End" Margin="16" Padding="14,9" InputTransparent="True"
+                            BackgroundColor="#B0000000" StrokeThickness="0" StrokeShape="RoundRectangle 10"
+                            IsVisible="{Binding HasLiveFrame}">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" VerticalOptions="Center">
+                            <Label Grid.Column="0" Text="Basınç" TextColor="#D6D9E0" FontSize="13"
+                                   VerticalOptions="Center" />
+                            <Border Grid.Column="1" VerticalOptions="Center" HeightRequest="18"
+                                    BackgroundColor="#33FFFFFF" StrokeThickness="0" StrokeShape="RoundRectangle 9">
+                                <ProgressBar Progress="{Binding Telemetry.PressureFill}"
+                                             ProgressColor="{Binding Telemetry.PressureBarColor}"
+                                             HeightRequest="18" VerticalOptions="Center" BackgroundColor="Transparent" />
+                            </Border>
+                            <Label Grid.Column="2" FontAttributes="Bold" FontSize="15" VerticalOptions="Center"
+                                   TextColor="{Binding Telemetry.PressureBarColor}"
+                                   Text="{Binding Telemetry.PressurePercent, StringFormat='{0:0}%', TargetNullValue='—'}" />
+                        </Grid>
+                    </Border>
                   </Grid>
                   <!-- /KAMERA -->
 
@@ -468,7 +487,7 @@
                                  IsVisible="{Binding IsBigCamera}">
                 <Label Text="{Binding Telemetry.TiltDegrees, StringFormat='Eğim: {0:0.0}°', TargetNullValue=''}"
                        TextColor="White" FontSize="12" HorizontalOptions="End" />
-                <Label Text="{Binding Telemetry.PressureBar, StringFormat='Basınç: {0:0.0} bar', TargetNullValue=''}"
+                <Label Text="{Binding Telemetry.PressurePercent, StringFormat='Basınç: {0:0}%', TargetNullValue=''}"
                        TextColor="White" FontSize="12" HorizontalOptions="End" />
                 <Label Text="{Binding Telemetry.TemperatureC, StringFormat='Sıcaklık: {0:0.0}°C', TargetNullValue=''}"
                        TextColor="White" FontSize="12" HorizontalOptions="End" />

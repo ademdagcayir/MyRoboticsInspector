@@ -84,10 +84,23 @@ $ph = @($after | Where-Object { $_.Status -eq 'Unknown' }).Count
             };
             using var p = Process.Start(psi);
             if (p is null) return false;
-            var outp = await p.StandardOutput.ReadToEndAsync();
+            // Timeout süreci BAŞTAN kapsasın; stdout+stderr eşzamanlı okunup pipe tamponu
+            // dolması (çocuk sürecin bloklanması) önlensin.
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-            await p.WaitForExitAsync(cts.Token);
-            return outp.Contains("NEEDS", StringComparison.OrdinalIgnoreCase);
+            var outTask = p.StandardOutput.ReadToEndAsync(cts.Token);
+            var errTask = p.StandardError.ReadToEndAsync(cts.Token); // içerik kullanılmaz, tampon boşaltılır
+            try
+            {
+                await p.WaitForExitAsync(cts.Token);
+                var outp = await outTask;
+                return outp.Contains("NEEDS", StringComparison.OrdinalIgnoreCase);
+            }
+            catch (OperationCanceledException)
+            {
+                // Asılı kalan PowerShell'i öldür — süreç sızıntısı olmasın
+                try { p.Kill(entireProcessTree: true); } catch { }
+                return false;
+            }
         }
         catch { return false; }
     }
@@ -98,16 +111,19 @@ $ph = @($after | Where-Object { $_.Status -eq 'Unknown' }).Count
         if (!OperatingSystem.IsWindows()) return "Yalnızca Windows.";
         try
         {
-            var dir = Path.GetTempPath();
-            var psPath = Path.Combine(dir, "f710_onar.ps1");
-            var resultPath = Path.Combine(dir, "f710_onar_sonuc.txt");
+            var resultPath = Path.Combine(Path.GetTempPath(), "f710_onar_sonuc.txt");
             try { if (File.Exists(resultPath)) File.Delete(resultPath); } catch { }
-            await File.WriteAllTextAsync(psPath, RepairScript);
+
+            // Script diske YAZILMAZ (TOCTOU/EoP önlemi): kullanıcı-yazılabilir %TEMP%'teki bir
+            // .ps1 yazma ile yükseltilmiş çalıştırma arasında değiştirilebilirdi. -EncodedCommand
+            // ile script base64 olarak komut satırına gömülür — süreç başladıktan sonra başka bir
+            // süreç içeriği değiştiremez.
+            var encoded = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(RepairScript));
 
             var psi = new ProcessStartInfo
             {
                 FileName = "powershell.exe",
-                Arguments = $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{psPath}\"",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand {encoded}",
                 UseShellExecute = true,   // Verb=runas için şart
                 Verb = "runas",
                 WindowStyle = ProcessWindowStyle.Hidden,

@@ -36,8 +36,14 @@ public sealed class RobotDriveStreamer : IAsyncDisposable
     private float _throttle;  // -1..+1  (ileri +, geri -)  → forward_backward'a TERS çevrilir
     private float _steer;     // -1..+1  (sağ +, sol -)     → left_right'a TERS çevrilir
     private bool _wasMoving;
+    // Acil dur yarışına karşı: StopAsync her çağrıda artırır; StreamLoop tick başında okuduğu
+    // değer yayın anında değişmişse (stop araya girmişse) bayat komutu YAYINLAMAZ.
+    private int _stopGeneration;
+    // StopAsync ile StreamLoop'un publish demetlerini serileştirir (brake'ten SONRA fb=±100 sızmasın).
+    private readonly SemaphoreSlim _pubGate = new(1, 1);
 
     private readonly CancellationTokenSource _cts = new();
+    private readonly Task _loopTask;
     public event EventHandler<string>? StreamError;
 
     /// <summary>UI/teşhis için en son firmware'e yayınlanan ham değerler.</summary>
@@ -47,7 +53,9 @@ public sealed class RobotDriveStreamer : IAsyncDisposable
     public RobotDriveStreamer(IRobotProtocol robot)
     {
         _robot = robot;
-        _ = StreamLoop(_cts.Token);
+        // UI thread'inde resolve edilse bile döngü thread-pool'da çalışmalı (XInputGamepadService kalıbı):
+        // aksi halde 10 Hz watchdog beslemesi UI'nın boş olmasına bağlı kalır.
+        _loopTask = Task.Run(() => StreamLoop(_cts.Token));
     }
 
     /// <summary>Oransal girdi (gamepad sağ stick): throttle = Y (ileri+), steer = X (sağ+). -1..+1.</summary>
@@ -90,18 +98,27 @@ public sealed class RobotDriveStreamer : IAsyncDisposable
     /// <summary>Sürüşü durdurur: durumu sıfırlar, anında forward_backward=0, left_right=0, brake=1 yayınlar.</summary>
     public async Task StopAsync()
     {
-        lock (_lock) { _throttle = 0; _steer = 0; _wasMoving = false; }
-        LastForwardBackward = 0; LastLeftRight = 0;
+        lock (_lock)
+        {
+            _throttle = 0; _steer = 0; _wasMoving = false;
+            _stopGeneration++; // StreamLoop'taki bekleyen tick'in bayat değeri yayınlamasını engeller
+            LastForwardBackward = 0; LastLeftRight = 0;
+        }
         if (!_robot.IsConnected) return;
+        await _pubGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            await _robot.PublishRawAsync(FirmwareTopics.ForwardBackward, "0");
-            await _robot.PublishRawAsync(FirmwareTopics.LeftRight, "0");
-            await _robot.PublishRawAsync(FirmwareTopics.Brake, "1");
+            await _robot.PublishRawAsync(FirmwareTopics.ForwardBackward, "0").ConfigureAwait(false);
+            await _robot.PublishRawAsync(FirmwareTopics.LeftRight, "0").ConfigureAwait(false);
+            await _robot.PublishRawAsync(FirmwareTopics.Brake, "1").ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             StreamError?.Invoke(this, $"Stop yayınlanamadı: {ex.Message}");
+        }
+        finally
+        {
+            _pubGate.Release();
         }
     }
 
@@ -110,44 +127,70 @@ public sealed class RobotDriveStreamer : IAsyncDisposable
         var timer = new PeriodicTimer(StreamInterval);
         try
         {
-            while (await timer.WaitForNextTickAsync(ct))
+            while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
             {
                 float thr, str;
-                lock (_lock) { thr = _throttle; str = _steer; }
+                int gen;
+                lock (_lock) { thr = _throttle; str = _steer; gen = _stopGeneration; }
 
                 var (fb, lr) = ToFirmware(thr, str);
                 bool moving = fb != 0 || lr != 0;
 
-                if (!_robot.IsConnected) { _wasMoving = false; continue; }
+                if (!_robot.IsConnected)
+                {
+                    lock (_lock) { _wasMoving = false; }
+                    continue;
+                }
 
                 if (!moving)
                 {
                     // Sürüş bırakıldı: bir kez 0 yay (anında dur), sonra sessiz (watchdog güvende).
-                    if (_wasMoving)
+                    bool publishZero;
+                    lock (_lock)
                     {
-                        _wasMoving = false;
-                        LastForwardBackward = 0; LastLeftRight = 0;
+                        publishZero = _wasMoving;
+                        if (publishZero) { _wasMoving = false; LastForwardBackward = 0; LastLeftRight = 0; }
+                    }
+                    if (!publishZero) continue;
+
+                    await _pubGate.WaitAsync(ct).ConfigureAwait(false);
+                    try
+                    {
+                        // Acil dur araya girdiyse zaten 0 + brake yayınlandı — tekrarlama.
+                        lock (_lock) { if (gen != _stopGeneration) continue; }
                         try
                         {
-                            await _robot.PublishRawAsync(FirmwareTopics.ForwardBackward, "0");
-                            await _robot.PublishRawAsync(FirmwareTopics.LeftRight, "0");
+                            await _robot.PublishRawAsync(FirmwareTopics.ForwardBackward, "0").ConfigureAwait(false);
+                            await _robot.PublishRawAsync(FirmwareTopics.LeftRight, "0").ConfigureAwait(false);
                         }
                         catch { /* sonraki bırakışta yine denenir */ }
                     }
+                    finally { _pubGate.Release(); }
                     continue;
                 }
 
-                _wasMoving = true;
-                LastForwardBackward = fb; LastLeftRight = lr;
+                await _pubGate.WaitAsync(ct).ConfigureAwait(false);
                 try
                 {
-                    await _robot.PublishRawAsync(FirmwareTopics.ForwardBackward, fb.ToString());
-                    await _robot.PublishRawAsync(FirmwareTopics.LeftRight, lr.ToString());
+                    // Acil dur (StopAsync) bu tick'in anlık görüntüsünden SONRA araya girdiyse
+                    // bayat ±100 değerini brake'ten sonra yayınlamamak için tick atlanır.
+                    lock (_lock)
+                    {
+                        if (gen != _stopGeneration) continue;
+                        _wasMoving = true;
+                        LastForwardBackward = fb; LastLeftRight = lr;
+                    }
+                    try
+                    {
+                        await _robot.PublishRawAsync(FirmwareTopics.ForwardBackward, fb.ToString()).ConfigureAwait(false);
+                        await _robot.PublishRawAsync(FirmwareTopics.LeftRight, lr.ToString()).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        // Geçici yayın hatası — sonraki tick yeniden dener (akış sürekli)
+                    }
                 }
-                catch
-                {
-                    // Geçici yayın hatası — sonraki tick yeniden dener (akış sürekli)
-                }
+                finally { _pubGate.Release(); }
             }
         }
         catch (OperationCanceledException) { }
@@ -157,7 +200,8 @@ public sealed class RobotDriveStreamer : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _cts.Cancel();
-        try { await StopAsync(); } catch { }
+        try { await _loopTask.ConfigureAwait(false); } catch { }
+        try { await StopAsync().ConfigureAwait(false); } catch { }
         _cts.Dispose();
     }
 }

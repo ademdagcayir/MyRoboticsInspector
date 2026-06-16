@@ -248,16 +248,17 @@
             </ScrollView>
 
             <!-- ── SAĞ: Proje Kanal Listesi ── -->
+            <!-- DİKKAT: StrokeThickness double'dır, Thickness DEĞİL — "1,0,0,0" sessizce 1000 olarak parse edilir! -->
             <Border Grid.Column="1"
                     Background="{StaticResource ColorSurface}"
-                    Stroke="{StaticResource ColorBorder}" StrokeThickness="1,0,0,0"
+                    Stroke="{StaticResource ColorBorder}" StrokeThickness="1"
                     StrokeShape="Rectangle">
                 <Grid RowDefinitions="Auto,*" RowSpacing="0">
 
                     <!-- Panel başlık -->
                     <Border Grid.Row="0"
                             Background="{StaticResource ColorSurface}"
-                            Stroke="{StaticResource ColorBorder}" StrokeThickness="0,0,0,1"
+                            Stroke="{StaticResource ColorBorder}" StrokeThickness="1"
                             Padding="16,12">
                         <Grid ColumnDefinitions="*,Auto">
                             <VerticalStackLayout Grid.Column="0" Spacing="1">
@@ -286,7 +287,7 @@
                         <CollectionView.ItemTemplate>
                             <DataTemplate x:DataType="vm:SiblingChannel">
                                 <Border Padding="14,10"
-                                        StrokeThickness="0,0,0,1"
+                                        StrokeThickness="1"
                                         Stroke="{StaticResource ColorBorder}"
                                         BackgroundColor="{Binding IsCurrent, Converter={StaticResource BoolToHighlightColor}}">
 

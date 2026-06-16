@@ -40,10 +40,24 @@ public class GamepadCommandMapper
         _input = input;
         _robot = robot;
         _drive = drive;
+
+        // Bağlantı kopup/gelince dedup cache'i sıfırla — kopukluk sırasında kaybolan "0 (dur)"
+        // komutu sonraki durum değişiminde yeniden yayınlanabilsin. Yeniden bağlanınca emniyet
+        // için kafayı hemen durdur (firmware kafa topic'lerinde watchdog YOK; stick hâlâ
+        // itiliyorsa bir sonraki StateChanged değeri yeniden gönderir).
+        _robot.ConnectionChanged += (_, connected) =>
+        {
+            _lastHead180 = int.MinValue;
+            _lastHead360 = int.MinValue;
+            if (connected) _ = PublishHeadStopAsync();
+        };
     }
 
     public void Attach()
     {
+        // Yeniden etkinleştirmede ilk durum her zaman yayınlansın (bayat dedup kalmasın)
+        _lastHead180 = int.MinValue;
+        _lastHead360 = int.MinValue;
         _input.StateChanged   += OnStateChanged;
         _input.ButtonPressed  += OnButtonPressed;
     }
@@ -53,8 +67,11 @@ public class GamepadCommandMapper
         _input.StateChanged   -= OnStateChanged;
         _input.ButtonPressed  -= OnButtonPressed;
 
-        // Emniyetli ayrılma — sürüşü durdur
+        // Emniyetli ayrılma — sürüşü VE kamera kafasını durdur (dönen kafa dönmeye devam etmesin)
         _ = _drive.StopAsync();
+        _lastHead180 = int.MinValue;
+        _lastHead360 = int.MinValue;
+        _ = PublishHeadStopAsync();
     }
 
     private void OnButtonPressed(object? sender, GamepadButton b)
@@ -63,7 +80,8 @@ public class GamepadCommandMapper
         {
             case GamepadButton.A:     SnapshotRequested?.Invoke(this, EventArgs.Empty); break;
             case GamepadButton.B:     EmergencyStopRequested?.Invoke(this, EventArgs.Empty);
-                                      _ = _drive.StopAsync(); break;
+                                      _ = _drive.StopAsync();
+                                      _ = PublishHeadStopAsync(); break;
             case GamepadButton.X:     ToggleLightRequested?.Invoke(this, EventArgs.Empty); break;
             case GamepadButton.Y:     MarkDefectRequested?.Invoke(this, EventArgs.Empty); break;
             case GamepadButton.Start: ToggleRecordingRequested?.Invoke(this, EventArgs.Empty); break;
@@ -71,9 +89,39 @@ public class GamepadCommandMapper
         }
     }
 
-    // Kamera kafası son gönderilen değerler (tekrar yaymayı önlemek için)
+    // Kamera kafası son gönderilen değerler (tekrar yaymayı önlemek için).
+    // int.MinValue = "bilinmiyor" → ilk değer her zaman yayınlanır.
     private int _lastHead180 = int.MinValue;
     private int _lastHead360 = int.MinValue;
+
+    /// <summary>Kafa komutunu yayınlar; dedup cache YALNIZCA yayın başarılı olunca güncellenir.
+    /// Başarısız yayın cache'i eski bırakır → sonraki StateChanged'de yeniden denenir (komut
+    /// kaybolmaz). Hızlı ardışık gönderimler sırasız tamamlanabilir; cache yalnızca dedup'a
+    /// hizmet ettiği için en kötü sonuç fazladan bir yeniden-yayındır (zararsız).</summary>
+    private async Task SendHeadAsync(string topic, int value, Action<int> commit)
+    {
+        try
+        {
+            await _robot.PublishRawAsync(topic, value.ToString());
+            commit(value);
+        }
+        catch { /* bağlantı kopmuş olabilir — cache değişmedi, sonraki değişimde tekrar denenir */ }
+    }
+
+    /// <summary>Kamera kafası motorlarına best-effort 0 (dur) yayınlar — emniyet amaçlı
+    /// (acil durdurma, gamepad devre dışı, yeniden bağlanma).</summary>
+    private async Task PublishHeadStopAsync()
+    {
+        if (!_robot.IsConnected) return;
+        try
+        {
+            await _robot.PublishRawAsync(FirmwareTopics.Head180UpDown, "0");
+            await _robot.PublishRawAsync(FirmwareTopics.Head360CwCcw, "0");
+            _lastHead180 = 0;
+            _lastHead360 = 0;
+        }
+        catch { /* gönderilemedi — cache bilinmez kaldı, sonraki değişimde yeniden yayınlanır */ }
+    }
 
     private void OnStateChanged(object? sender, GamepadState s)
     {
@@ -100,8 +148,8 @@ public class GamepadCommandMapper
         {
             int tilt = Math.Abs(s.LeftStickY) < 0.35f ? 0 : (int)Math.Round(s.LeftStickY * 100f);
             int rot  = Math.Abs(s.LeftStickX) < 0.35f ? 0 : (int)Math.Round(s.LeftStickX * 100f);
-            if (tilt != _lastHead180) { _ = _robot.PublishRawAsync(FirmwareTopics.Head180UpDown, tilt.ToString()); _lastHead180 = tilt; }
-            if (rot  != _lastHead360) { _ = _robot.PublishRawAsync(FirmwareTopics.Head360CwCcw,  rot.ToString());  _lastHead360 = rot; }
+            if (tilt != _lastHead180) _ = SendHeadAsync(FirmwareTopics.Head180UpDown, tilt, v => _lastHead180 = v);
+            if (rot  != _lastHead360) _ = SendHeadAsync(FirmwareTopics.Head360CwCcw,  rot,  v => _lastHead360 = v);
         }
     }
 }

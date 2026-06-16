@@ -10,11 +10,15 @@ public class AppSettings
 
     // ----- Camera -----
     [MaxLength(500)]
-    /// <summary>Canlı önizleme akışı — sub-stream (düşük bant, düşük gecikme).</summary>
-    public string RtspUrl { get; set; } = "rtsp://admin:emayetencere1@192.168.1.64:554/Streaming/Channels/102";
+    /// <summary>
+    /// Canlı önizleme akışı — sub-stream (düşük bant, düşük gecikme).
+    /// GÜVENLİK: Varsayılan BOŞ — kamera kimlik bilgisi kaynak koda gömülmez
+    /// (eskiden gömülüydü; mevcut kurulumlar DB'deki kayıtlı değeri kullanmaya devam eder).
+    /// </summary>
+    public string RtspUrl { get; set; } = "";
 
-    /// <summary>Kayıt akışı — ana stream, yüksek kalite (boş bırakılırsa RtspUrl kullanılır).</summary>
-    public string RecordingRtspUrl { get; set; } = "rtsp://admin:emayetencere1@192.168.1.64:554/Streaming/Channels/101";
+    /// <summary>Kayıt akışı — ana stream, yüksek kalite (boş bırakılırsa RtspUrl'den türetilir).</summary>
+    public string RecordingRtspUrl { get; set; } = "";
 
     /// <summary>LibVLC network-caching value (ms). Lower = less latency, more frame drops.</summary>
     public int NetworkCachingMs { get; set; } = 200;
@@ -51,6 +55,13 @@ public class AppSettings
     [MaxLength(120)]
     public string? OperatorName { get; set; }
 
+    /// <summary>
+    /// Bu cihazın okunabilir adı (ör. "Saha Tableti 1"). Bulutta cihaz ayrımı için.
+    /// Boşsa makine adı (Environment.MachineName) kullanılır.
+    /// </summary>
+    [MaxLength(120)]
+    public string DeviceLabel { get; set; } = "";
+
     // ----- Storage -----
     [MaxLength(500)]
     public string StoragePath { get; set; } = string.Empty;
@@ -86,6 +97,19 @@ public class AppSettings
     /// <summary>Overlay yazı boyutu çarpanı (1.0 = varsayılan). 0.5–2.5 arası.</summary>
     public double OverlayFontScale { get; set; } = 1.0;
 
+    // ----- Sensör kalibrasyonu (ham ADC → birim) -----
+    /// <summary>Eğim 3-nokta kalibrasyonu: robot yatayken (0°) okunan ham ADC.</summary>
+    public int? TiltRaw0Deg { get; set; }
+    /// <summary>Eğim -45° konumunda okunan ham ADC.</summary>
+    public int? TiltRawMinus45 { get; set; }
+    /// <summary>Eğim +45° konumunda okunan ham ADC.</summary>
+    public int? TiltRawPlus45 { get; set; }
+
+    /// <summary>Basınç kalibrasyonu: %0'a karşılık gelen ham ADC (alt sınır).</summary>
+    public int? PressureRawMin { get; set; }
+    /// <summary>Basınç kalibrasyonu: %100'e karşılık gelen ham ADC (üst sınır).</summary>
+    public int? PressureRawMax { get; set; }
+
     // ----- Gamepad (Logitech F710 / XInput) -----
     /// <summary>Uygulama açılınca XInput polling otomatik başlasın mı.</summary>
     public bool GamepadAutoStart { get; set; } = true;
@@ -107,4 +131,14 @@ public class AppSettings
 
     [MaxLength(500)]
     public string? CompanyLogoPath { get; set; }
+
+    // ----- Bulut yedekleme (Supabase) -----
+    /// <summary>Bulut yedekleme açık mı (hesap girişi ayrıca gerekir).</summary>
+    public bool CloudBackupEnabled { get; set; }
+
+    /// <summary>Videolar da yedeklensin mi (büyük dosyalar — kapatılırsa yalnız resim/rapor/veri).</summary>
+    public bool CloudIncludeVideos { get; set; } = true;
+
+    /// <summary>Otomatik senkron aralığı (dakika).</summary>
+    public int CloudSyncIntervalMin { get; set; } = 15;
 }

@@ -594,18 +594,32 @@ public partial class LiveViewModel : BaseViewModel
         // Anlık girdi göstergesi — timer ile CurrentState doğrudan okunur, event yok
 
         // Gamepad → uygulama içi aksiyonlar (snapshot, defect, kayıt, vb.)
+        // SafeDispatch: async void delegeden kaçan exception yakalanamaz ve süreci düşürür —
+        // tüm handler gövdeleri try/catch sarmalayıcıdan geçer, hata StatusMessage'a düşer.
         _gamepadMapper.StatusMessage          += (_, msg) => MainThread.BeginInvokeOnMainThread(() => StatusMessage = msg);
-        _gamepadMapper.SnapshotRequested      += (_, _) => MainThread.BeginInvokeOnMainThread(async () => await SnapshotAsync());
-        _gamepadMapper.EmergencyStopRequested += (_, _) => MainThread.BeginInvokeOnMainThread(async () => await EmergencyStopAsync());
-        _gamepadMapper.ToggleLightRequested   += (_, _) => MainThread.BeginInvokeOnMainThread(async () => await ToggleLightAsync());
-        _gamepadMapper.MarkDefectRequested    += (_, _) => MainThread.BeginInvokeOnMainThread(() => MarkDefect());
-        _gamepadMapper.ToggleRecordingRequested += (_, _) => MainThread.BeginInvokeOnMainThread(async () => await ToggleRecordingAsync());
-        _gamepadMapper.ToggleInspectionRequested += (_, _) => MainThread.BeginInvokeOnMainThread(async () =>
+        _gamepadMapper.SnapshotRequested      += (_, _) => SafeDispatch(SnapshotAsync);
+        _gamepadMapper.EmergencyStopRequested += (_, _) => SafeDispatch(EmergencyStopAsync);
+        _gamepadMapper.ToggleLightRequested   += (_, _) => SafeDispatch(ToggleLightAsync);
+        _gamepadMapper.MarkDefectRequested    += (_, _) => SafeDispatch(MarkDefectAsync);
+        _gamepadMapper.ToggleRecordingRequested += (_, _) => SafeDispatch(ToggleRecordingAsync);
+        _gamepadMapper.ToggleInspectionRequested += (_, _) => SafeDispatch(async () =>
         {
             if (IsInspecting) await FinishInspectionAsync();
             else await StartInspectionAsync();
         });
     }
+
+    /// <summary>
+    /// Gamepad event'lerini ana thread'de GÜVENLİ çalıştırır. async void lambda'dan kaçan
+    /// exception .NET'te yakalanamaz ve uygulamayı kapatır (sahada joystick tuşu → DB/disk
+    /// hatası → çökme + süren kaydın kaybı). Burada yakalanıp StatusMessage'a yazılır.
+    /// </summary>
+    private void SafeDispatch(Func<Task> action) =>
+        MainThread.BeginInvokeOnMainThread(async () =>
+        {
+            try { await action(); }
+            catch (Exception ex) { StatusMessage = $"Hata: {ex.Message}"; }
+        });
 
     private void OnTelemetryPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -652,6 +666,7 @@ public partial class LiveViewModel : BaseViewModel
         _pipeline.Overlay.FlowText = null;
         _pipeline.OffsetSeconds = Math.Clamp(_settings.MeterSyncOffsetMs, 0, 3000) / 1000.0;
         _pipeline.ConfigureOverlayFont(_settings.OverlayFontFamily, _settings.OverlayFontScale);
+        _telemetry.ApplyCalibration(_settings);   // eğim/basınç kalibrasyon referanslarını yükle
 
         _mqtt?.Configure(_settings.TopicPrefix, _settings.RobotId);
         BrokerEndpoint = $"{_settings.BrokerHost}:{_settings.BrokerPort}";
@@ -788,6 +803,7 @@ public partial class LiveViewModel : BaseViewModel
             }
 
             FlushConsolesIfDirty();               // konsol metinlerini kısıtlı hızda toplu tazele
+            _pipeline.Overlay.TiltDegrees = Telemetry.TiltDegrees; // kalibre eğim → video overlay (anlık)
 
             GamepadDiag = _gamepad.SlotSummary;   // XInput slot teşhisi (her tick)
             var s = _gamepad.CurrentState;
@@ -858,6 +874,10 @@ public partial class LiveViewModel : BaseViewModel
         {
             StatusMessage = "Ayarlar yükleniyor...";
             await LoadSettingsAsync();
+            // LoadSettingsAsync sonunda yayını KENDİSİ başlatır (StartStreamAsync'i çağırır) —
+            // devam edersek _pipeline.Start İKİNCİ kez çağrılır, yeni açılan decode ffmpeg'i
+            // öldürülüp yeniden kurulur (çifte RTSP bağlantısı + kısa siyah ekran). Başladıysa bitir.
+            if (IsStreaming) return;
         }
 
         if (_settings is null)
@@ -932,9 +952,6 @@ public partial class LiveViewModel : BaseViewModel
     [RelayCommand]
     private async Task ToggleRecordingAsync()
     {
-        if (_settings is null) await LoadSettingsAsync();
-        if (_settings is null) return;
-
         // Durdur
         if (IsRecording)
         {
@@ -951,52 +968,73 @@ public partial class LiveViewModel : BaseViewModel
             return;
         }
 
-        // Önizleme aktif değilse başlat (önizleme /102; kayıt AYRI /101)
-        if (!IsStreaming) await StartStreamAsync();
-
-        var ffmpegPath = await Task.Run(() => FfmpegRecorder.ResolveFfmpeg(_settings.FfmpegPath ?? "ffmpeg"));
-        if (ffmpegPath is null) { StatusMessage = "⚠ FFmpeg bulunamadı"; return; }
-
-        var dir = RecordingDirectory();
-        Directory.CreateDirectory(dir);
-        var file = Path.Combine(dir, $"kayit_{DateTime.Now:yyyyMMdd_HHmmss}.mp4");
-
-        // TEK-GEÇİŞ drawtext kayıt: /101 4K → overlay gömülü → MP4 (tam kalite, senkron, donma yok)
-        var rtsp4k = string.IsNullOrWhiteSpace(_settings.RecordingRtspUrl) ? _settings.RtspUrl : _settings.RecordingRtspUrl;
-        double recOffset = Math.Clamp(_settings.RecordingMeterSyncOffsetMs, 0, 3000) / 1000.0;
-        StatusMessage = "● Kayıt başlatılıyor…";
-        if (await _recorder.StartAsync(ffmpegPath, rtsp4k, file, _pipeline.Overlay,
-                _settings.OverlayFontFamily, _settings.OverlayFontScale, recOffset, _settings.RecordingEncoder))
+        // Başlat — DB/disk hataları (geçersiz StoragePath, erişilemeyen sürücü vb.) gamepad'in
+        // async void yolunda süreci düşürmesin diye tüm başlatma bölümü try içinde.
+        try
         {
-            _pipelineRecordFile = file;
-            _pipeline.ShowRecBadge = true;
-            _pipeline.RecordingStartedAt = DateTime.Now; // video zaman sayacı 00:00'dan başlasın
-            IsRecording = true;
-            _streamStartedAt ??= DateTime.Now;
-            StatusMessage = $"● Kayıt: {Path.GetFileName(file)}";
+            // Ayarları KOŞULSUZ taze çek: StoragePath/RecordingRtspUrl/encoder oturum içinde
+            // değişmiş olabilir (singleton VM eski ayarı önbellekliyordu — video eski köke giderdi).
+            // Full LoadSettingsAsync ÇAĞRILMAZ: ağır yan etkileri var (yayın/broker yeniden kurulumu).
+            _settings = await _db.GetSettingsAsync();
+            if (_settings is null) return;
 
-            if (ActiveInspection is not null && string.IsNullOrEmpty(ActiveInspection.VideoPath))
+            // Önizleme aktif değilse başlat (önizleme /102; kayıt AYRI /101)
+            if (!IsStreaming) await StartStreamAsync();
+
+            var ffmpegPath = await Task.Run(() => FfmpegRecorder.ResolveFfmpeg(_settings.FfmpegPath ?? "ffmpeg"));
+            if (ffmpegPath is null) { StatusMessage = "⚠ FFmpeg bulunamadı"; return; }
+
+            var dir = RecordingDirectory();
+            Directory.CreateDirectory(dir);
+            var file = Path.Combine(dir, $"kayit_{DateTime.Now:yyyyMMdd_HHmmss}.mp4");
+
+            // TEK-GEÇİŞ drawtext kayıt: /101 4K → overlay gömülü → MP4 (tam kalite, senkron, donma yok)
+            var rtsp4k = string.IsNullOrWhiteSpace(_settings.RecordingRtspUrl) ? _settings.RtspUrl : _settings.RecordingRtspUrl;
+            double recOffset = Math.Clamp(_settings.RecordingMeterSyncOffsetMs, 0, 3000) / 1000.0;
+            StatusMessage = "● Kayıt başlatılıyor…";
+            if (await _recorder.StartAsync(ffmpegPath, rtsp4k, file, _pipeline.Overlay,
+                    _settings.OverlayFontFamily, _settings.OverlayFontScale, recOffset, _settings.RecordingEncoder))
             {
-                ActiveInspection.VideoPath = file;
-                await _db.SaveInspectionAsync(ActiveInspection);
+                _pipelineRecordFile = file;
+                _pipeline.ShowRecBadge = true;
+                _pipeline.RecordingStartedAt = DateTime.Now; // video zaman sayacı 00:00'dan başlasın
+                IsRecording = true;
+                _streamStartedAt ??= DateTime.Now;
+                StatusMessage = $"● Kayıt: {Path.GetFileName(file)}";
+
+                if (ActiveInspection is not null && string.IsNullOrEmpty(ActiveInspection.VideoPath))
+                {
+                    ActiveInspection.VideoPath = file;
+                    await _db.SaveInspectionAsync(ActiveInspection);
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            // Başlatma sırasında hata: kayıt açıldıysa kapat, REC rozetini düşür
+            if (_recorder.IsRecording) { try { await _recorder.StopAsync(); } catch { /* yoksay */ } }
+            _pipeline.ShowRecBadge = false;
+            _pipeline.RecordingStartedAt = null;
+            IsRecording = false;
+            StatusMessage = $"Kayıt başlatılamadı: {ex.Message}";
         }
     }
 
     [RelayCommand]
     private async Task SnapshotAsync()
     {
-        if (_settings is null) await LoadSettingsAsync();
-
-        var frame = _pipeline.Snapshot();
-        if (frame is null)
-        {
-            StatusMessage = "Snapshot alınamadı — yayın aktif değil";
-            return;
-        }
-
         try
         {
+            if (_settings is null) await LoadSettingsAsync();
+
+            // 4K karenin JPEG encode'u ağır — UI/önizlemeyi takmamak için arka planda
+            var frame = await Task.Run(() => _pipeline.Snapshot());
+            if (frame is null)
+            {
+                StatusMessage = "Snapshot alınamadı — yayın aktif değil";
+                return;
+            }
+
             var dir = Path.Combine(StorageRoot(), "snapshots");
             Directory.CreateDirectory(dir);
             var path = Path.Combine(dir, $"snap_{DateTime.Now:yyyyMMdd_HHmmss}.jpg");
@@ -1048,32 +1086,50 @@ public partial class LiveViewModel : BaseViewModel
         if (_recorder.IsRecording) await _recorder.StopAsync();
         _pipeline.ShowRecBadge = false;
         _pipeline.RecordingStartedAt = null;
-        ActiveInspection.FinishedAt = DateTime.Now;
-        if (Telemetry.DistanceMeters is double d) ActiveInspection.DistanceMeters = d;
-        await _db.SaveInspectionAsync(ActiveInspection);
-        StatusMessage = $"İnceleme tamamlandı ({DefectCount} kusur)";
-        ActiveInspection = null;
-        IsRecording = false;
-        ActiveDefects.Clear();
+        try
+        {
+            // DB hatası gamepad'in async void yolunda süreci düşürmesin (sahada çökme)
+            ActiveInspection.FinishedAt = DateTime.Now;
+            if (Telemetry.DistanceMeters is double d) ActiveInspection.DistanceMeters = d;
+            await _db.SaveInspectionAsync(ActiveInspection);
+            StatusMessage = $"İnceleme tamamlandı ({DefectCount} kusur)";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"İnceleme kaydedilemedi: {ex.Message}";
+        }
+        finally
+        {
+            // UI durumu her durumda tutarlı kapansın
+            ActiveInspection = null;
+            IsRecording = false;
+            ActiveDefects.Clear();
+        }
     }
 
     // ----- Defect marking -----
 
     [RelayCommand]
-    private void MarkDefect()
+    private async Task MarkDefectAsync()
     {
         if (ActiveInspection is null) return;
 
-        // Anlık composite kareyi (overlay gömülü) dosyaya kaydet
-        var frame = _pipeline.Snapshot();
+        // Tuşa basıldığı ANIN değerlerini yakala — await sonrası metre ilerlemiş /
+        // inceleme kapatılmış olabilir
+        var inspectionId = ActiveInspection.Id;
+        var distance = Telemetry.DistanceMeters;
+
+        // Anlık composite kareyi (overlay gömülü) dosyaya kaydet — 4K JPEG encode ağır,
+        // arka planda yapılır (UI/önizleme/sürüş yayını takılmaz)
+        var frame = await Task.Run(() => _pipeline.Snapshot());
         if (frame is not null)
         {
             try
             {
-                var dir = Path.Combine(StorageRoot(), "inspections", ActiveInspection.Id.ToString(), "defects");
+                var dir = Path.Combine(StorageRoot(), "inspections", inspectionId.ToString(), "defects");
                 Directory.CreateDirectory(dir);
                 var path = Path.Combine(dir, $"defect_{DateTime.Now:yyyyMMdd_HHmmss}.jpg");
-                File.WriteAllBytes(path, frame);
+                await File.WriteAllBytesAsync(path, frame);
                 EditingDefectSnapshotPath = path;
             }
             catch { EditingDefectSnapshotPath = null; }
@@ -1085,9 +1141,9 @@ public partial class LiveViewModel : BaseViewModel
 
         EditingDefect = new Defect
         {
-            InspectionId = ActiveInspection.Id,
+            InspectionId = inspectionId,
             VideoTimestampMs = 0,  // MediaPlayer no longer available
-            DistanceMeters = Telemetry.DistanceMeters,
+            DistanceMeters = distance,
             Severity = DefectSeverity.Medium,
             PhotoPath = EditingDefectSnapshotPath
         };
@@ -1196,10 +1252,10 @@ public partial class LiveViewModel : BaseViewModel
     [RelayCommand]
     private async Task ConnectRobotAsync()
     {
-        if (_settings is null) await LoadSettingsAsync();
         try
         {
             IsBusy = true;
+            if (_settings is null) await LoadSettingsAsync(); // try içinde — DB hatası status'a düşsün, fırlamasın
             if (_mqtt is not null)
             {
                 await _mqtt.ConnectAsync(_settings!.BrokerHost, _settings.BrokerPort,
@@ -1277,36 +1333,21 @@ public partial class LiveViewModel : BaseViewModel
 
         var desired = !IsLightOn;
 
-        // Cancel any prior pending ack timer
-        _lightAckCts?.Cancel();
-        _lightAckCts = new CancellationTokenSource();
-        var ct = _lightAckCts.Token;
-
-        IsLightPending = true;
-        StatusMessage = desired ? "Işık ON gönderildi, onay bekleniyor..." : "Işık OFF gönderildi, onay bekleniyor...";
-
+        // Firmware LED durumu YAYINLAMAZ (FirmwareTopics: joystick/led mevcut firmware'de
+        // kullanılmıyor, ışık basınca göre otomatik) — eski 3 sn'lik telemetri onayı bu
+        // yüzden HER ZAMAN timeout'a düşüyordu. İyimser durum: komut yayınlanınca toggle.
         try
         {
             await _robot.SendAsync(new RobotCommand(desired ? RobotCommandType.LightOn : RobotCommandType.LightOff));
+            IsLightOn = desired;
+            IsLightPending = false;
+            StatusMessage = desired ? "Işık ON komutu gönderildi" : "Işık OFF komutu gönderildi";
         }
         catch (Exception ex)
         {
             IsLightPending = false;
             StatusMessage = $"Komut gönderilemedi: {ex.Message}";
-            return;
         }
-
-        // Wait up to 3 seconds for telemetry to reflect the new state.
-        try
-        {
-            await Task.Delay(3000, ct);
-            if (!ct.IsCancellationRequested)
-            {
-                IsLightPending = false;
-                StatusMessage = "Işık komutu onaylanmadı (timeout)";
-            }
-        }
-        catch (TaskCanceledException) { /* confirmed via telemetry */ }
     }
 
     // ── Kanal odaklı kayıt (ProjectChannelsPage'den çağrılır) ──
@@ -1317,7 +1358,11 @@ public partial class LiveViewModel : BaseViewModel
     /// </summary>
     public async Task StartRecordingForChannelAsync(Inspection channel, Job project)
     {
-        if (_settings is null) await LoadSettingsAsync();
+        // Ayarları KOŞULSUZ taze çek: StoragePath/RecordingRtspUrl/encoder oturum içinde
+        // değişmiş olabilir (singleton VM eski ayarı önbellekliyordu — video eski köke,
+        // fotoğraf/rapor yeni köke yazılıp bölünüyordu). Full LoadSettingsAsync ÇAĞRILMAZ:
+        // ağır yan etkileri var (yayın/broker yeniden kurulumu).
+        _settings = await _db.GetSettingsAsync();
         if (_settings is null)
         {
             StatusMessage = "⚠ Ayarlar yüklenemedi";
@@ -1348,22 +1393,30 @@ public partial class LiveViewModel : BaseViewModel
 
         ActiveInspection = channel;
 
-        // Eski video dosyasını sil (üzerine yazma onaylandı)
-        if (!string.IsNullOrEmpty(channel.VideoPath) && File.Exists(channel.VideoPath))
-        {
-            try { File.Delete(channel.VideoPath); } catch { /* yoksay */ }
-        }
-
-        // Her zaman yeni yolu DB'ye kaydet
-        channel.VideoPath = file;
-        await _db.SaveInspectionAsync(channel);
-
         // Önizleme (/102) aktif değilse başlat
         if (!IsStreaming) await StartStreamAsync();
 
+        // ÖNCE kayıt gerçekten başlayabilecek mi bak — ffmpeg yoksa eski videoya/DB'ye DOKUNMA.
+        // (Eski sıralama: önce sil + DB'ye yeni yol yaz → ffmpeg yok/RTSP kapalıyken eski video
+        // geri getirilemez biçimde gidiyor, DB hiç var olmayan dosyayı gösteriyordu.)
         StatusMessage = "Kayıt başlatılıyor…";
         var ffmpegPath = await Task.Run(() => FfmpegRecorder.ResolveFfmpeg(_settings.FfmpegPath ?? "ffmpeg"));
         if (ffmpegPath is null) { StatusMessage = "⚠ FFmpeg bulunamadı"; return; }
+
+        // Eski videoyu hemen SİLME — kayıt başarıyla başlayana dek .bak adına taşı.
+        // (Dosya adı deterministik olduğundan yeni kayıt aynı yola yazılabilir; ad boşaltılır.)
+        var oldVideoPath = channel.VideoPath;
+        string? backupPath = null;
+        if (!string.IsNullOrEmpty(oldVideoPath) && File.Exists(oldVideoPath))
+        {
+            try
+            {
+                backupPath = oldVideoPath + ".bak";
+                if (File.Exists(backupPath)) File.Delete(backupPath);
+                File.Move(oldVideoPath, backupPath);
+            }
+            catch { backupPath = null; /* taşınamazsa eski davranış: ffmpeg üzerine yazar */ }
+        }
 
         // TEK-GEÇİŞ drawtext kayıt: /101 4K → overlay (proje/il-ilçe/baca/akış + senkron metre) gömülü → MP4
         var rtsp4k = string.IsNullOrWhiteSpace(_settings.RecordingRtspUrl) ? _settings.RtspUrl : _settings.RecordingRtspUrl;
@@ -1371,6 +1424,19 @@ public partial class LiveViewModel : BaseViewModel
         if (await _recorder.StartAsync(ffmpegPath, rtsp4k, file, _pipeline.Overlay,
                 _settings.OverlayFontFamily, _settings.OverlayFontScale, recOffset, _settings.RecordingEncoder))
         {
+            // Kayıt GERÇEKTEN başladı → yeni yolu ANCAK ŞİMDİ DB'ye yaz, eski yedeği temizle
+            channel.VideoPath = file;
+            // Bulut etiketleme: bu kanalı kim/hangi robot/hangi cihaz kaydetti — KAYIT ANINDA dondur.
+            channel.OperatorName = string.IsNullOrWhiteSpace(_settings.OperatorName) ? null : _settings.OperatorName;
+            channel.RobotId = string.IsNullOrWhiteSpace(_settings.RobotId) ? null : _settings.RobotId;
+            channel.DeviceId = Services.Cloud.CloudBackupService.DeviceId;
+            try { await _db.SaveInspectionAsync(channel); }
+            catch (Exception ex) { StatusMessage = $"Video yolu DB'ye yazılamadı: {ex.Message}"; }
+            if (backupPath is not null)
+            {
+                try { File.Delete(backupPath); } catch { /* yoksay */ }
+            }
+
             _pipelineRecordFile = file;
             _pipeline.ShowRecBadge = true;
             _pipeline.RecordingStartedAt = DateTime.Now; // video zaman sayacı 00:00'dan başlasın
@@ -1380,6 +1446,16 @@ public partial class LiveViewModel : BaseViewModel
         }
         else
         {
+            // Kayıt başlamadı → eski videoyu geri getir; DB'deki VideoPath'e DOKUNULMADI
+            if (backupPath is not null && !string.IsNullOrEmpty(oldVideoPath) && File.Exists(backupPath))
+            {
+                try
+                {
+                    if (File.Exists(oldVideoPath)) File.Delete(oldVideoPath); // yarım kalan yeni dosya (aynı ad)
+                    File.Move(backupPath, oldVideoPath);
+                }
+                catch { /* yoksay */ }
+            }
             StatusMessage = "⚠ Kayıt başlatılamadı";
         }
     }

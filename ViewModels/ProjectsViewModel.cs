@@ -101,12 +101,22 @@ public partial class ProjectsViewModel : BaseViewModel
         if (item is null) return;
         var confirmed = await Shell.Current.DisplayAlert(
             "Projeyi sil",
-            $"\"{item.Project.Title}\" silinsin mi?\n\nBu işlem geri alınamaz.",
+            $"\"{item.Project.Title}\" silinsin mi?\n\nProjeye bağlı tüm kanallar, kusurlar, fotoğraf ve video dosyaları da silinir.\nBu işlem geri alınamaz.",
             "Sil", "Vazgeç");
         if (!confirmed) return;
 
-        await _db.DeleteJobAsync(item.Project);
-        Projects.Remove(item);
-        StatusMessage = "Proje silindi";
+        try
+        {
+            // DeleteJobAsync artık tam cascade yapıyor: bağlı kanallar → kusur satırları +
+            // fotoğraf/video/rapor PDF dosyaları → proje. Inline döngü gereksizdi ve
+            // DeleteInspectionCascadeAsync'i atladığı için rapor PDF'lerini sızdırıyordu.
+            await _db.DeleteJobAsync(item.Project);
+            Projects.Remove(item);
+            StatusMessage = "Proje silindi";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Silme hatası: {ex.Message}";
+        }
     }
 }

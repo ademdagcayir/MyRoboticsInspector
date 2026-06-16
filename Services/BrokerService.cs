@@ -12,6 +12,9 @@ public class BrokerService : IAsyncDisposable
 {
     private Process? _proc;
 
+    // Start/Stop'u serileştirir — paralel çağrılar iki süreç başlatmasın / yarışmasın
+    private readonly SemaphoreSlim _gate = new(1, 1);
+
     public bool IsRunning => _proc is { HasExited: false };
 
     /// <summary>true = çalışıyor, false = durdu.</summary>
@@ -30,63 +33,97 @@ public class BrokerService : IAsyncDisposable
     /// <summary>Broker'ı başlatır. Zaten çalışıyorsa true döner. Bulunamazsa/başlatılamazsa false.</summary>
     public async Task<bool> StartAsync()
     {
-        if (IsRunning) return true;
-
-        var exe = FindMosquitto();
-        if (exe is null)
-        {
-            Output?.Invoke(this, "Mosquitto bulunamadı: C:\\Program Files\\mosquitto\\mosquitto.exe");
-            Output?.Invoke(this, "Kurmak için: winget install -e --id EclipseFoundation.Mosquitto");
-            return false;
-        }
-
-        // Dev config'i AppData'ya yaz (start-broker.cmd'deki mosquitto-dev.conf ile aynı içerik).
-        var confPath = Path.Combine(FileSystem.AppDataDirectory, "mosquitto-dev.conf");
-        try { await File.WriteAllTextAsync(confPath, ConfigContent()); }
-        catch (Exception ex) { Output?.Invoke(this, $"Config yazılamadı: {ex.Message}"); return false; }
-
-        var psi = new ProcessStartInfo
-        {
-            FileName = exe,
-            Arguments = $"-c \"{confPath}\" -v",
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            WorkingDirectory = FileSystem.AppDataDirectory,
-        };
-
-        _proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
-        _proc.OutputDataReceived += (_, e) => { if (e.Data is not null) Output?.Invoke(this, e.Data); };
-        _proc.ErrorDataReceived  += (_, e) => { if (e.Data is not null) Output?.Invoke(this, e.Data); };
-        _proc.Exited += (_, _) => StatusChanged?.Invoke(this, false);
-
+        await _gate.WaitAsync();
         try
         {
-            _proc.Start();
-            _proc.BeginOutputReadLine();
-            _proc.BeginErrorReadLine();
-            StatusChanged?.Invoke(this, true);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Output?.Invoke(this, $"Broker başlatılamadı: {ex.Message}");
+            if (IsRunning)
+            {
+                StatusChanged?.Invoke(this, true); // UI'daki bayat "durdu" durumu kendini onarsın
+                return true;
+            }
+
+            var exe = FindMosquitto();
+            if (exe is null)
+            {
+                Output?.Invoke(this, "Mosquitto bulunamadı: C:\\Program Files\\mosquitto\\mosquitto.exe");
+                Output?.Invoke(this, "Kurmak için: winget install -e --id EclipseFoundation.Mosquitto");
+                return false;
+            }
+
+            // Dev config'i AppData'ya yaz (start-broker.cmd'deki mosquitto-dev.conf ile aynı içerik).
+            var confPath = Path.Combine(FileSystem.AppDataDirectory, "mosquitto-dev.conf");
+            try { await File.WriteAllTextAsync(confPath, ConfigContent()); }
+            catch (Exception ex) { Output?.Invoke(this, $"Config yazılamadı: {ex.Message}"); return false; }
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = exe,
+                Arguments = $"-c \"{confPath}\" -v",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                WorkingDirectory = FileSystem.AppDataDirectory,
+            };
+
+            // Eski (çıkmış) süreç nesnesini bırak — handle sızıntısı olmasın
+            _proc?.Dispose();
             _proc = null;
-            return false;
+
+            var proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
+            proc.OutputDataReceived += (_, e) => { if (e.Data is not null) Output?.Invoke(this, e.Data); };
+            proc.ErrorDataReceived  += (_, e) => { if (e.Data is not null) Output?.Invoke(this, e.Data); };
+            // Yalnızca GÜNCEL sürecin çıkışı durumu değiştirsin — hızlı durdur+başlat'ta eski
+            // sürecin gecikmiş Exited event'i yeni broker'ı "durdu" gösteremesin.
+            proc.Exited += (_, _) => { if (ReferenceEquals(proc, _proc)) StatusChanged?.Invoke(this, false); };
+            _proc = proc;
+
+            try
+            {
+                _proc.Start();
+                _proc.BeginOutputReadLine();
+                _proc.BeginErrorReadLine();
+                StatusChanged?.Invoke(this, true);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Output?.Invoke(this, $"Broker başlatılamadı: {ex.Message}");
+                _proc = null;
+                proc.Dispose();
+                return false;
+            }
         }
+        finally { _gate.Release(); }
     }
 
-    public Task StopAsync()
+    public async Task StopAsync()
     {
+        await _gate.WaitAsync();
         try
         {
-            if (_proc is { HasExited: false }) _proc.Kill(entireProcessTree: true);
+            // Önce _proc'u boşalt — eski sürecin Exited event'i (ReferenceEquals kontrolü sayesinde)
+            // artık durumu değiştiremez.
+            var old = _proc;
+            _proc = null;
+            if (old is not null)
+            {
+                try
+                {
+                    if (!old.HasExited)
+                    {
+                        old.Kill(entireProcessTree: true);
+                        // Port bırakılsın — hemen ardından gelen Start bind hatası yemesin
+                        using var killCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                        await old.WaitForExitAsync(killCts.Token);
+                    }
+                }
+                catch { /* zaten kapanmış / zaman aşımı olabilir */ }
+                finally { old.Dispose(); }
+            }
+            StatusChanged?.Invoke(this, false);
         }
-        catch { /* zaten kapanmış olabilir */ }
-        _proc = null;
-        StatusChanged?.Invoke(this, false);
-        return Task.CompletedTask;
+        finally { _gate.Release(); }
     }
 
     private static string ConfigContent() => string.Join("\n", new[]

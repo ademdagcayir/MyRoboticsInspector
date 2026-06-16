@@ -3,7 +3,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:MyRoboticsInspector.ViewModels"
              xmlns:m="clr-namespace:MyRoboticsInspector.Models"
-             xmlns:svc="clr-namespace:MyRoboticsInspector.Services"
              xmlns:skia="clr-namespace:SkiaSharp.Views.Maui.Controls;assembly=SkiaSharp.Views.Maui.Controls"
              x:Class="MyRoboticsInspector.Pages.ProjectChannelsPage"
              x:DataType="vm:ProjectChannelsViewModel"
@@ -294,6 +293,24 @@
                                      HorizontalOptions="End" VerticalOptions="Start"
                                      IsVisible="{Binding Live.IsRecording}" />
                         </Grid>
+
+                        <!-- BASINÇ BARI — stream'in altında, pil tarzı (≥60 yeşil / 40-60 turuncu / <40 kırmızı) -->
+                        <Border VerticalOptions="End" Margin="16" Padding="14,9" InputTransparent="True"
+                                BackgroundColor="#B0000000" StrokeThickness="0" StrokeShape="RoundRectangle 10"
+                                IsVisible="{Binding Live.HasLiveFrame}">
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" VerticalOptions="Center">
+                                <Label Grid.Column="0" Text="Basınç" TextColor="#D6D9E0" FontSize="13" VerticalOptions="Center" />
+                                <Border Grid.Column="1" VerticalOptions="Center" HeightRequest="18"
+                                        BackgroundColor="#33FFFFFF" StrokeThickness="0" StrokeShape="RoundRectangle 9">
+                                    <ProgressBar Progress="{Binding Live.Telemetry.PressureFill}"
+                                                 ProgressColor="{Binding Live.Telemetry.PressureBarColor}"
+                                                 HeightRequest="18" VerticalOptions="Center" BackgroundColor="Transparent" />
+                                </Border>
+                                <Label Grid.Column="2" FontAttributes="Bold" FontSize="15" VerticalOptions="Center"
+                                       TextColor="{Binding Live.Telemetry.PressureBarColor}"
+                                       Text="{Binding Live.Telemetry.PressurePercent, StringFormat='{0:0}%', TargetNullValue='—'}" />
+                            </Grid>
+                        </Border>
                     </Grid>
                 </Border>
 
@@ -459,52 +476,31 @@
                                    VerticalOptions="Center" />
                         </Grid>
 
-                        <!-- MQTT log — kompakt liste -->
+                        <!-- MQTT log — TEK-METİN terminal (en yeni üstte, MainPage'deki desen).
+                             Not: Eski MqttLog koleksiyonu hiç doldurulmuyordu (ölü binding) —
+                             trafik MqttConsoleText tamponuna akar, panel artık onu gösterir. -->
                         <Border Grid.Row="1"
                                 Background="{StaticResource ColorSurfaceSubtle}" StrokeThickness="1"
                                 Stroke="{StaticResource ColorBorder}"
                                 StrokeShape="RoundRectangle 8"
                                 Padding="0">
-                            <CollectionView ItemsSource="{Binding Live.MqttLog}"
-                                            VerticalScrollBarVisibility="Never">
-                                <CollectionView.EmptyView>
-                                    <Label Text="Bağlantı bekleniyor" TextColor="{StaticResource ColorTextTertiary}" FontSize="10"
-                                           HorizontalOptions="Center" Margin="0,10" />
-                                </CollectionView.EmptyView>
-                                <CollectionView.ItemTemplate>
-                                    <DataTemplate x:DataType="svc:MqttLogEntry">
-                                        <Grid Padding="8,2" ColumnDefinitions="38,Auto,*" ColumnSpacing="4">
-                                            <Label Grid.Column="0"
-                                                   Text="{Binding TimeStr}"
-                                                   FontSize="9" TextColor="{StaticResource ColorTextTertiary}" VerticalOptions="Center" />
-                                            <Label Grid.Column="1"
-                                                   Text="{Binding Label}"
-                                                   FontSize="9" FontAttributes="Bold"
-                                                   VerticalOptions="Center">
-                                                <Label.Triggers>
-                                                    <DataTrigger TargetType="Label" Binding="{Binding Direction}" Value="TX">
-                                                        <Setter Property="TextColor" Value="{StaticResource ColorAccent}" />
-                                                    </DataTrigger>
-                                                    <DataTrigger TargetType="Label" Binding="{Binding Direction}" Value="RX">
-                                                        <Setter Property="TextColor" Value="{StaticResource ColorSuccess}" />
-                                                    </DataTrigger>
-                                                    <DataTrigger TargetType="Label" Binding="{Binding Direction}" Value="Info">
-                                                        <Setter Property="TextColor" Value="{StaticResource ColorWarning}" />
-                                                    </DataTrigger>
-                                                    <DataTrigger TargetType="Label" Binding="{Binding Direction}" Value="Error">
-                                                        <Setter Property="TextColor" Value="{StaticResource ColorDanger}" />
-                                                    </DataTrigger>
-                                                </Label.Triggers>
-                                            </Label>
-                                            <Label Grid.Column="2"
-                                                   Text="{Binding Payload}"
-                                                   FontSize="9" TextColor="{StaticResource ColorTextSecondary}"
-                                                   LineBreakMode="TailTruncation"
-                                                   VerticalOptions="Center" />
-                                        </Grid>
-                                    </DataTemplate>
-                                </CollectionView.ItemTemplate>
-                            </CollectionView>
+                            <Grid>
+                                <ScrollView VerticalScrollBarVisibility="Always" Padding="8,4">
+                                    <Label Text="{Binding Live.MqttConsoleText}"
+                                           FontSize="9" TextColor="{StaticResource ColorTextSecondary}"
+                                           LineBreakMode="NoWrap" />
+                                </ScrollView>
+                                <!-- Boş durum: henüz hiç trafik yoksa -->
+                                <Label Text="Bağlantı bekleniyor" TextColor="{StaticResource ColorTextTertiary}" FontSize="10"
+                                       HorizontalOptions="Center" VerticalOptions="Start" Margin="0,10"
+                                       IsVisible="False">
+                                    <Label.Triggers>
+                                        <DataTrigger TargetType="Label" Binding="{Binding Live.MqttConsoleText}" Value="">
+                                            <Setter Property="IsVisible" Value="True" />
+                                        </DataTrigger>
+                                    </Label.Triggers>
+                                </Label>
+                            </Grid>
                         </Border>
                     </Grid>
 

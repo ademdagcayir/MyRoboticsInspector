@@ -1,12 +1,23 @@
 using System.Buffers;
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MQTTnet;
 using MQTTnet.Protocol;
 using MyRoboticsInspector.Models;
 using MyRoboticsInspector.Services;
+using MyRoboticsInspector.Services.Cloud;
 
 namespace MyRoboticsInspector.ViewModels;
+
+/// <summary>Bulut dosya listesi satırı (Ayarlar → Bulut Yedek kartı).</summary>
+public sealed class CloudFileDisplay
+{
+    public required string RelPath { get; init; }
+    public required string StoragePath { get; init; }
+    public required string Detail { get; init; }
+    public string FileName => Path.GetFileName(RelPath);
+}
 
 public partial class SettingsViewModel : BaseViewModel
 {
@@ -38,6 +49,9 @@ public partial class SettingsViewModel : BaseViewModel
     [ObservableProperty] private int updateProgress;
 
     public bool IsUpdateSupported => _updates.IsSupported;
+
+    /// <summary>Kalibrasyon ekranı anlık ham ADC göstergesi için telemetri servisi.</summary>
+    public TelemetryService Telemetry => _telemetry;
 
     /// <summary>Overlay için seçilebilir sistem fontları (Picker kaynağı).</summary>
     public string[] OverlayFonts { get; } =
@@ -78,20 +92,43 @@ public partial class SettingsViewModel : BaseViewModel
     }
 
     private readonly SyncedVideoPipeline _pipeline;
+    private readonly TelemetryService _telemetry;
+    private readonly CloudAuthService _cloudAuth;
+    private readonly CloudBackupService _cloudBackup;
+    private EventHandler? _cloudStatusHandler;
 
-    public SettingsViewModel(DatabaseService db, BackupService backup, AuthService auth, UpdateService updates, SyncedVideoPipeline pipeline)
+    public SettingsViewModel(DatabaseService db, BackupService backup, AuthService auth, UpdateService updates,
+                             SyncedVideoPipeline pipeline, TelemetryService telemetry,
+                             CloudAuthService cloudAuth, CloudBackupService cloudBackup)
     {
         _db = db;
         _backup = backup;
         _auth = auth;
         _updates = updates;
         _pipeline = pipeline;
+        _telemetry = telemetry;
+        _cloudAuth = cloudAuth;
+        _cloudBackup = cloudBackup;
         Title = "Ayarlar";
 
         OneDriveAvailable = _backup.OneDriveAvailable;
         BackupRecommendedFolder = _backup.RecommendedBackupFolder;
         CurrentProfileName = _auth.CurrentProfile?.Name;
         CurrentVersion = _updates.CurrentVersion;
+
+        // VM transient — sayfa kapanınca Cleanup() ile çözülür (sızıntı yok).
+        _cloudStatusHandler = (_, _) => MainThread.BeginInvokeOnMainThread(RefreshCloudStatus);
+        _cloudBackup.StatusChanged += _cloudStatusHandler;
+        _cloudAuth.SessionChanged += _cloudStatusHandler;
+    }
+
+    /// <summary>Sayfa kapanınca singleton eventlerinden ayrıl (transient VM sızıntı önlemi).</summary>
+    public void Cleanup()
+    {
+        if (_cloudStatusHandler is null) return;
+        _cloudBackup.StatusChanged -= _cloudStatusHandler;
+        _cloudAuth.SessionChanged -= _cloudStatusHandler;
+        _cloudStatusHandler = null;
     }
 
     partial void OnSettingsChanged(AppSettings value) => RefreshBackupStatus();
@@ -107,6 +144,12 @@ public partial class SettingsViewModel : BaseViewModel
         _suppressThemeApply = false;
 
         RefreshBackupStatus();
+
+        // Bulut: bu profilin kayıtlı oturumu varsa sessizce bağlan ve listeyi getir.
+        if (!_cloudAuth.IsSignedIn)
+            await _cloudAuth.AttachProfileAsync(_auth.CurrentProfile?.Id ?? CloudAuthService.LocalProfileId);
+        RefreshCloudStatus();
+        if (IsCloudSignedIn) _ = LoadCloudFilesAsync();
 
         // Açılışta sessiz background kontrolü (kullanıcı istemişse)
         if (Settings.AutoCheckUpdates && IsUpdateSupported)
@@ -173,9 +216,17 @@ public partial class SettingsViewModel : BaseViewModel
         // Senkron gecikmesi + overlay font'unu canlı uygula (pipeline singleton — anında etkili)
         _pipeline.OffsetSeconds = Math.Clamp(Settings.MeterSyncOffsetMs, 0, 3000) / 1000.0;
         _pipeline.ConfigureOverlayFont(Settings.OverlayFontFamily, Settings.OverlayFontScale);
+        _telemetry.ApplyCalibration(Settings);   // eğim/basınç kalibrasyonu anında etkili
         RefreshBackupStatus();
         StatusMessage = "Ayarlar kaydedildi";
     }
+
+    // ============ KALİBRASYON — "Şimdi Yakala" (anlık ham ADC'yi referans olarak al) ============
+    [RelayCommand] private void CaptureTilt0()      { Settings.TiltRaw0Deg     = _telemetry.TiltRaw;     OnPropertyChanged(nameof(Settings)); StatusMessage = $"0° referansı: {_telemetry.TiltRaw?.ToString() ?? "—"}"; }
+    [RelayCommand] private void CaptureTiltMinus45() { Settings.TiltRawMinus45  = _telemetry.TiltRaw;     OnPropertyChanged(nameof(Settings)); StatusMessage = $"-45° referansı: {_telemetry.TiltRaw?.ToString() ?? "—"}"; }
+    [RelayCommand] private void CaptureTiltPlus45()  { Settings.TiltRawPlus45   = _telemetry.TiltRaw;     OnPropertyChanged(nameof(Settings)); StatusMessage = $"+45° referansı: {_telemetry.TiltRaw?.ToString() ?? "—"}"; }
+    [RelayCommand] private void CapturePressureMin() { Settings.PressureRawMin  = _telemetry.PressureRaw; OnPropertyChanged(nameof(Settings)); StatusMessage = $"Basınç min: {_telemetry.PressureRaw?.ToString() ?? "—"}"; }
+    [RelayCommand] private void CapturePressureMax() { Settings.PressureRawMax  = _telemetry.PressureRaw; OnPropertyChanged(nameof(Settings)); StatusMessage = $"Basınç max: {_telemetry.PressureRaw?.ToString() ?? "—"}"; }
 
     [RelayCommand]
     private async Task UseOneDriveAsync()
@@ -260,6 +311,209 @@ public partial class SettingsViewModel : BaseViewModel
                 Color.FromArgb("#e66")),
             _ => ("", Colors.Gray)
         };
+    }
+
+    // ============ BULUT YEDEK (Supabase) ============
+
+    [ObservableProperty] private string cloudEmailInput = "";
+    [ObservableProperty] private string cloudPasswordInput = "";
+    [ObservableProperty] private bool isCloudBusy;
+    [ObservableProperty] private string cloudStatusText = "";
+    [ObservableProperty] private Color cloudStatusColor = Colors.Gray;
+    [ObservableProperty] private string? cloudSignedInEmail;
+    [ObservableProperty] private bool isCloudSignedIn;
+    [ObservableProperty] private string cloudQueueText = "";
+    [ObservableProperty] private string? cloudCurrentItem;
+    [ObservableProperty] private string cloudTotalsText = "";
+    [ObservableProperty] private bool isCloudDeleteUnlocked;
+    [ObservableProperty] private bool isCloudFilesLoading;
+
+    public ObservableCollection<CloudFileDisplay> CloudFiles { get; } = new();
+
+    private void RefreshCloudStatus()
+    {
+        IsCloudSignedIn = _cloudAuth.IsSignedIn;
+        CloudSignedInEmail = _cloudAuth.Session?.Email;
+        CloudCurrentItem = _cloudBackup.CurrentItem;
+        IsCloudDeleteUnlocked = _cloudBackup.DeleteUnlockedUntil is { } t && t > DateTime.Now;
+
+        CloudQueueText = _cloudBackup.PendingCount > 0
+            ? $"{_cloudBackup.UploadedCount} dosya bulutta · {_cloudBackup.PendingCount} sırada"
+            : _cloudBackup.UploadedCount > 0
+                ? $"{_cloudBackup.UploadedCount} dosya bulutta · sıra boş"
+                : "";
+
+        (CloudStatusText, CloudStatusColor) = _cloudBackup.State switch
+        {
+            CloudBackupState.Syncing => (
+                "⟳ Senkronlanıyor…", Color.FromArgb("#6ab7ff")),
+            CloudBackupState.Idle when _cloudBackup.LastSyncAt is { } at => (
+                $"✓ Yedek güncel — son senkron {at:HH:mm}", Color.FromArgb("#5fc97e")),
+            CloudBackupState.Idle => (
+                "✓ Hazır", Color.FromArgb("#5fc97e")),
+            CloudBackupState.Offline => (
+                "⚠ Çevrimdışı — bağlantı gelince devam edilecek", Color.FromArgb("#ffcc66")),
+            CloudBackupState.Error => (
+                $"✗ {_cloudBackup.LastError}", Color.FromArgb("#e66")),
+            CloudBackupState.NotSignedIn when Settings.CloudBackupEnabled => (
+                "Bulut hesabına giriş yapın", Color.FromArgb("#ffcc66")),
+            CloudBackupState.Disabled or CloudBackupState.NotSignedIn => (
+                "Bulut yedekleme kapalı", Color.FromArgb("#9ba3af")),
+            _ => ("", Colors.Gray),
+        };
+    }
+
+    [RelayCommand]
+    private async Task CloudSignInAsync()
+    {
+        if (string.IsNullOrWhiteSpace(CloudEmailInput) || string.IsNullOrWhiteSpace(CloudPasswordInput))
+        {
+            StatusMessage = "E-posta ve parola gerekli";
+            return;
+        }
+        IsCloudBusy = true;
+        try
+        {
+            await _cloudAuth.AttachProfileAsync(_auth.CurrentProfile?.Id ?? CloudAuthService.LocalProfileId);
+            await _cloudAuth.SignInAsync(CloudEmailInput, CloudPasswordInput);
+            CloudPasswordInput = "";
+            Settings.CloudBackupEnabled = true;
+            await _db.SaveSettingsAsync(Settings);
+            OnPropertyChanged(nameof(Settings));
+            StatusMessage = "Bulut hesabına giriş yapıldı — yedekleme başlıyor";
+            _ = _cloudBackup.SyncNowAsync();
+        }
+        catch (CloudAuthException ex) { StatusMessage = ex.Message; }
+        catch (Exception ex) { StatusMessage = "Giriş başarısız: " + ex.Message; }
+        finally { IsCloudBusy = false; RefreshCloudStatus(); }
+    }
+
+    [RelayCommand]
+    private async Task CloudSignUpAsync()
+    {
+        if (string.IsNullOrWhiteSpace(CloudEmailInput) || CloudPasswordInput.Length < 6)
+        {
+            StatusMessage = "E-posta ve en az 6 karakter parola gerekli";
+            return;
+        }
+        IsCloudBusy = true;
+        try
+        {
+            await _cloudAuth.AttachProfileAsync(_auth.CurrentProfile?.Id ?? CloudAuthService.LocalProfileId);
+            await _cloudAuth.SignUpAsync(CloudEmailInput, CloudPasswordInput);
+            CloudPasswordInput = "";
+            Settings.CloudBackupEnabled = true;
+            await _db.SaveSettingsAsync(Settings);
+            OnPropertyChanged(nameof(Settings));
+            StatusMessage = "Hesap oluşturuldu — yedekleme başlıyor";
+            _ = _cloudBackup.SyncNowAsync();
+        }
+        catch (CloudAuthException ex) { StatusMessage = ex.Message; }
+        catch (Exception ex) { StatusMessage = "Kayıt başarısız: " + ex.Message; }
+        finally { IsCloudBusy = false; RefreshCloudStatus(); }
+    }
+
+    [RelayCommand]
+    private async Task CloudSignOutAsync()
+    {
+        await _cloudAuth.SignOutAsync();
+        CloudFiles.Clear();
+        CloudTotalsText = "";
+        StatusMessage = "Bulut hesabından çıkıldı (yedekler bulutta korunur)";
+        RefreshCloudStatus();
+    }
+
+    [RelayCommand]
+    private async Task CloudSyncNowAsync()
+    {
+        await _db.SaveSettingsAsync(Settings); // toggle değişiklikleri senkrondan önce kalıcı olsun
+        await _cloudBackup.SyncNowAsync();
+        await LoadCloudFilesAsync();
+    }
+
+    [RelayCommand]
+    private async Task LoadCloudFilesAsync()
+    {
+        if (!_cloudAuth.IsSignedIn) return;
+        IsCloudFilesLoading = true;
+        try
+        {
+            var (count, bytes) = await _cloudBackup.GetCloudTotalsAsync();
+            CloudTotalsText = count == 0
+                ? "Bulutta henüz dosya yok"
+                : $"Bulutta toplam {count} dosya · {CloudBackupService.FormatBytes(bytes)}";
+
+            var files = await _cloudBackup.GetRecentCloudFilesAsync();
+            CloudFiles.Clear();
+            foreach (var f in files)
+                CloudFiles.Add(new CloudFileDisplay
+                {
+                    RelPath = f.RelPath,
+                    StoragePath = f.StoragePath,
+                    Detail = $"{CloudBackupService.FormatBytes(f.ByteSize)} · {f.UploadedAt.ToLocalTime():dd.MM.yyyy HH:mm}",
+                });
+        }
+        catch (Exception ex) { StatusMessage = ex.Message; }
+        finally { IsCloudFilesLoading = false; }
+    }
+
+    [RelayCommand]
+    private async Task SetCloudDeletePinAsync()
+    {
+        if (!_cloudAuth.IsSignedIn) { StatusMessage = "Önce bulut hesabına giriş yapın"; return; }
+        try
+        {
+            var current = await Shell.Current.DisplayPromptAsync("Silme PIN'i",
+                "Mevcut PIN (ilk kez belirliyorsanız boş bırakın):", "Devam", "Vazgeç",
+                maxLength: 12, keyboard: Keyboard.Numeric);
+            if (current is null) return;
+
+            var fresh = await Shell.Current.DisplayPromptAsync("Silme PIN'i",
+                "Yeni PIN (en az 4 hane). Buluttan silme YALNIZ bu PIN ile mümkün olur:",
+                "Kaydet", "Vazgeç", maxLength: 12, keyboard: Keyboard.Numeric);
+            if (string.IsNullOrWhiteSpace(fresh)) return;
+
+            await _cloudBackup.SetDeletePinAsync(current, fresh);
+            StatusMessage = "✓ Silme PIN'i sunucuda güncellendi (bcrypt)";
+        }
+        catch (Exception ex) { StatusMessage = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task DeleteCloudFileAsync(CloudFileDisplay? file)
+    {
+        if (file is null) return;
+        try
+        {
+            // Pencere kapalıysa PIN iste → sunucuda 5 dakikalık silme izni aç.
+            if (_cloudBackup.DeleteUnlockedUntil is not { } until || until <= DateTime.Now)
+            {
+                var pin = await Shell.Current.DisplayPromptAsync("🔒 Silme Kilidi",
+                    $"\"{file.FileName}\" buluttan silinecek.\nSilme PIN'inizi girin (5 dk geçerli pencere açılır):",
+                    "Kilidi Aç", "Vazgeç", maxLength: 12, keyboard: Keyboard.Numeric);
+                if (string.IsNullOrWhiteSpace(pin)) return;
+                await _cloudBackup.UnlockDeleteAsync(pin);
+            }
+
+            var sure = await Shell.Current.DisplayAlert("Buluttan Sil",
+                $"\"{file.FileName}\" kalıcı olarak buluttan silinsin mi?\n(Yerel kopya etkilenmez.)",
+                "Sil", "Vazgeç");
+            if (!sure) return;
+
+            await _cloudBackup.DeleteCloudFileAsync(file.StoragePath);
+            CloudFiles.Remove(file);
+            StatusMessage = $"✓ Buluttan silindi: {file.FileName}";
+        }
+        catch (Exception ex) { StatusMessage = ex.Message; }
+        finally { RefreshCloudStatus(); }
+    }
+
+    [RelayCommand]
+    private async Task LockCloudDeleteAsync()
+    {
+        await _cloudBackup.LockDeleteAsync();
+        StatusMessage = "Silme kilidi kapatıldı";
+        RefreshCloudStatus();
     }
 
     // ============ MQTT TEST (unchanged) ============
