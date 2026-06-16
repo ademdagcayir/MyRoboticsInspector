@@ -552,6 +552,7 @@ public partial class SettingsViewModel : BaseViewModel
         {
             var builder = new MqttClientOptionsBuilder()
                 .WithTcpServer(Settings.BrokerHost, Settings.BrokerPort)
+                .WithProtocolVersion(MQTTnet.Formatter.MqttProtocolVersion.V311) // Arduino/eski Mosquitto uyumu
                 .WithClientId($"test-{Guid.NewGuid().ToString("N")[..8]}")
                 .WithCleanSession()
                 .WithKeepAlivePeriod(TimeSpan.FromSeconds(10));

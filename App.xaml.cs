@@ -40,6 +40,11 @@ public partial class App : Application
 
     protected override Window CreateWindow(IActivationState? activationState)
     {
+        // Gömülü Mosquitto broker'ını başlat (exe yanındaki 'mosquitto\' klasöründen).
+        // Ayrı broker kurulumu/eski yazılım gerekmez. Port zaten doluysa (başka broker
+        // çalışıyorsa) sessizce no-op'a düşer; uygulama mevcut broker'a bağlanır.
+        _ = _services.GetRequiredService<BrokerService>().StartAsync();
+
         // Bulut yedek servisini ayağa kaldır + kayıtlı bulut oturumunu sessizce bağla.
         // Login ekranı kaldırıldı (kullanıcı tercihi: saha aracında sürtünmesiz açılış);
         // çoklu hesap artık YALNIZCA bulut tarafında (Ayarlar → Bulut Yedek e-posta/parola).

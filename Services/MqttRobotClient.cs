@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Text;
 using MQTTnet;
+using MQTTnet.Formatter;
 using MQTTnet.Protocol;
 using MyRoboticsInspector.Models;
 
@@ -151,6 +152,10 @@ public class MqttRobotClient : IRobotProtocol
         // brake=1 yayınlar (atoi formatı — JSON değil) → sürüş motorları kilitlenir.
         var options = new MqttClientOptionsBuilder()
             .WithTcpServer(host, port)
+            // MQTT 3.1.1 ŞART: robot/pano (Arduino PubSubClient) ve eski/gömülü Mosquitto
+            // yalnız 3.1.1 konuşur. MQTTnet 5 varsayılanı 5.0 olduğundan açıkça sabitlenir
+            // (yoksa eski broker CONNECT'i reddeder → "MQTT client is not connected").
+            .WithProtocolVersion(MqttProtocolVersion.V311)
             .WithClientId($"pc-{Environment.MachineName}-{Guid.NewGuid().ToString("N")[..6]}")
             .WithWillTopic(FirmwareTopics.Brake)
             .WithWillPayload(Encoding.UTF8.GetBytes("1"))
@@ -176,6 +181,7 @@ public class MqttRobotClient : IRobotProtocol
         // brake=1 yayınlar (atoi formatı — JSON değil) → sürüş motorları kilitlenir.
         var builder = new MqttClientOptionsBuilder()
             .WithTcpServer(host, port)
+            .WithProtocolVersion(MqttProtocolVersion.V311) // Arduino/eski Mosquitto uyumu (yukarıya bkz)
             .WithClientId($"pc-{Environment.MachineName}-{Guid.NewGuid().ToString("N")[..6]}")
             .WithWillTopic(FirmwareTopics.Brake)
             .WithWillPayload(Encoding.UTF8.GetBytes("1"))

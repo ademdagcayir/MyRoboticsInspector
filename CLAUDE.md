@@ -60,6 +60,10 @@ IP'ler: broker `.130`, robot `.131`, pano `.132`.
 
 Uygulama eşleme: `Services/MqttRobotClient.cs` (SendAsync), `RobotDriveStreamer.cs` (throttle/steer→fb/lr, 100ms stream, watchdog besler), `GamepadCommandMapper.cs` (sağ stick=sürüş, sol stick=kafa).
 
+**MQTT PROTOKOL SÜRÜMÜ (KRİTİK — v1.1.8):** MqttRobotClient + SettingsViewModel.TestConnection `WithProtocolVersion(MqttProtocolVersion.V311)` ZORUNLU. Robot/pano (Arduino PubSubClient) ve eski/gömülü Mosquitto yalnız MQTT **3.1.1** konuşur; MQTTnet 5 varsayılanı **5.0** olduğundan açıkça sabitlenmezse eski broker CONNECT'i reddeder → "MQTT client is not connected" (host/port doğru olsa bile). Saha teşhisi: `netstat -ano | findstr :1883` (broker 0.0.0.0 dinliyorsa erişim var → sorun protokol/auth).
+
+**GÖMÜLÜ BROKER (v1.1.8):** Mosquitto Windows binary'leri repo kökünde `mosquitto/` (15 dosya, ~8MB; mosquitto_common.dll dahil ŞART — minimal set port açmaz). csproj `<None Include="mosquitto\**" CopyToOutputDirectory>` (yalnız windows) → publish çıktısına, kurulumda exe yanına kopyalanır. `BrokerService.FindMosquitto()` önce `AppContext.BaseDirectory\mosquitto\mosquitto.exe`'ye bakar (gömülü), sonra Program Files. App.xaml.cs açılışta `BrokerService.StartAsync()` (config: listener 1883 0.0.0.0, allow_anonymous true). Port doluysa (başka broker çalışıyorsa) no-op → uygulama mevcut broker'a bağlanır. Yani: ayrı Mosquitto/eski yazılım GEREKMEZ; robot/pano bu PC'deki broker'a (ethernet IP, ör .130) bağlanmaya devam eder, firmware değişmez.
+
 ## 5. Telemetri + Kalibrasyon
 - `Services/TelemetryService.cs` — MQTT ham int → observable. Ham (`TiltRaw`,`PressureRaw`) + kalibre (`TiltDegrees`,`PressurePercent`,`PressureFill`,`PressureBarColor`).
 - `Services/Calibration.cs` — Eğim 3-nokta parçalı-lineer (0°/−45°/+45° ham ADC); Basınç min/max → %0..100; renk ≥60 yeşil / 40–60 turuncu / <40 kırmızı.

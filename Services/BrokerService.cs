@@ -24,6 +24,10 @@ public class BrokerService : IAsyncDisposable
 
     private static readonly string[] MosquittoPaths =
     {
+        // 1) Uygulamayla GÖMÜLÜ gelen broker (exe yanındaki 'mosquitto\' klasörü) — öncelikli.
+        //    Böylece ayrı Mosquitto kurulumu gerekmez; tek installer her şeyi getirir.
+        Path.Combine(AppContext.BaseDirectory, "mosquitto", "mosquitto.exe"),
+        // 2) Sisteme ayrıca kurulmuş Mosquitto (geri dönüş).
         @"C:\Program Files\mosquitto\mosquitto.exe",
         @"C:\Program Files (x86)\mosquitto\mosquitto.exe",
     };
